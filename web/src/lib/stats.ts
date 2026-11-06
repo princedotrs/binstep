@@ -4,8 +4,8 @@ import { readMarkets } from "./read";
 
 /** Base Sepolia makes a block every 2 seconds. */
 const BLOCKS_PER_DAY = 43_200n;
-/** The public RPC refuses eth_getLogs over wider ranges. */
-const LOG_RANGE = 200n;
+/** The default public RPC refuses eth_getLogs over wider ranges. */
+const DEFAULT_LOG_RANGE = 200n;
 const CONCURRENT_READS = 6;
 
 const swapEvent = parseAbiItem(
@@ -38,11 +38,11 @@ export function blockChunks(from: bigint, to: bigint, size: bigint): [bigint, bi
   return chunks;
 }
 
-/** Runs on the server: about 216 reads is too heavy to send through a mixnet per visitor. */
-export async function scanStats(client: PublicClient): Promise<Record<string, MarketStats>> {
+/** Runs on the server, because a day of logs is too heavy to send through a mixnet per visitor. */
+export async function scanStats(client: PublicClient, logRange = DEFAULT_LOG_RANGE): Promise<Record<string, MarketStats>> {
   const [toBlock, markets] = await Promise.all([client.getBlockNumber(), readMarkets(client)]);
   const dayAgo = toBlock - BLOCKS_PER_DAY;
-  const queue = blockChunks(dayAgo > FIRST_BLOCK ? dayAgo : FIRST_BLOCK, toBlock, LOG_RANGE);
+  const queue = blockChunks(dayAgo > FIRST_BLOCK ? dayAgo : FIRST_BLOCK, toBlock, logRange);
   const swaps = new Map<string, { amountUsdc: bigint; fee: number }[]>();
 
   const worker = async () => {

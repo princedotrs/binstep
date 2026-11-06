@@ -9,7 +9,7 @@ export type DeployedMarket = {
   baseIsToken0: boolean;
 };
 
-type Deployment = typeof liveDeployment & { deployBlock?: number; markets?: DeployedMarket[]; registry?: string };
+type Deployment = typeof liveDeployment & { deployBlock?: number; markets?: DeployedMarket[]; registry?: string; automationBlock?: number };
 
 /** Set by scripts/devnet.sh. The app runs against Base Sepolia when these are absent. */
 export const deployment: Deployment = process.env.NEXT_PUBLIC_DEPLOYMENT
@@ -42,5 +42,7 @@ export const addresses = {
 /** Log scans start here on a devnet, because older blocks live on the upstream RPC. */
 export const FIRST_BLOCK = BigInt(deployment.deployBlock ?? 0);
 export const POOL_MANAGER = deployment.poolManager as Address;
+/** Automation counts start here. The chain holds older runs, but no log scan reaches them. */
+export const AUTOMATION_BLOCK = deployment.automationBlock ?? deployment.deployBlock;
 /** Absent until a deployment has one, and Create pool waits for it. */
 export const REGISTRY = deployment.registry as Address | undefined;

@@ -12,6 +12,7 @@
   "weth": "0x93FAB36cD136A137650960746e361B5F161b589B",
   "wethIsToken0": true,
   "registry": "0xFD7401Fd8090c97450FD903dB66fEf2C333B7256",
+  "automationBlock": 55340148,
   "markets": [
     {
       "symbol": "tWBTC",

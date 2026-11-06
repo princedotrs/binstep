@@ -1,11 +1,11 @@
 import { DEVNET } from "@/lib/addresses";
-import { serverClient } from "@/lib/server-rpc";
+import { LOG_RANGE, logClient } from "@/lib/server-rpc";
 import { scanStats, type MarketStats } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
-const FRESH_MS = DEVNET ? 3_000 : 5 * 60_000;
-const CACHE_HEADER = DEVNET ? "no-store" : "public, s-maxage=300, stale-while-revalidate=3600";
+const FRESH_MS = DEVNET ? 3_000 : 60_000;
+const CACHE_HEADER = DEVNET ? "no-store" : "public, s-maxage=60, stale-while-revalidate=300";
 
 type AllStats = Record<string, MarketStats>;
 
@@ -13,7 +13,7 @@ let cached: { at: number; stats: AllStats } | null = null;
 let scanning: Promise<AllStats> | null = null;
 
 function refresh() {
-  scanning ??= scanStats(serverClient)
+  scanning ??= scanStats(logClient, LOG_RANGE)
     .then((stats) => {
       cached = { at: Date.now(), stats };
       return stats;
