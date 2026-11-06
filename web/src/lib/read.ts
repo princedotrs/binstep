@@ -1,13 +1,17 @@
 import { erc20Abi, parseAbi, type Address, type PublicClient } from "viem";
-import { hookAbi, managerAbi } from "./abi";
-import { POOL_ID, STATE_VIEW, WETH_IS_TOKEN0, addresses } from "./addresses";
+import { hookAbi, managerAbi, registryAbi } from "./abi";
+import { REGISTRY, STATE_VIEW, addresses } from "./addresses";
+import { MARKETS, communityMarket, type Market } from "./markets";
 import { binOf, tickToUsd } from "./math";
 
 const stateViewAbi = parseAbi([
   "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
 ]);
 
-const PAGE = 100n;
+/** Snapshots cost about 630k gas each, and public RPCs cap the gas of a read. */
+const PAGE = 25n;
+/** Anyone can create markets, so the server reads only the newest ones. */
+const COMMUNITY_SHOWN = 100n;
 
 export type Position = {
   id: bigint;
@@ -19,34 +23,36 @@ export type Position = {
   autoRebalance: boolean;
   inRange: boolean;
   successorLowerBin: number;
-  pendingWeth: bigint;
+  pendingBase: bigint;
   pendingUsdc: bigint;
-  idleWeth: bigint;
+  idleBase: bigint;
   idleUsdc: bigint;
   nextRebalanceAt: bigint;
   bins: readonly bigint[];
 };
 
 export type WalletState = {
-  weth: bigint;
+  base: bigint;
   usdc: bigint;
-  managerAllowanceWeth: bigint;
+  managerAllowanceBase: bigint;
   managerAllowanceUsdc: bigint;
-  routerAllowanceWeth: bigint;
+  routerAllowanceBase: bigint;
   routerAllowanceUsdc: bigint;
 };
 
 export type PoolState = {
+  market: Market;
   tick: number;
   usd: number;
   activeBin: number;
   feePips: number;
   stableTick: number;
-  wethIsToken0: boolean;
   positions: Position[];
   bins: { bin: number; liquidity: bigint }[];
   wallet: WalletState | null;
 };
+
+export type Pools = Record<string, PoolState>;
 
 const manager = { address: addresses.manager, abi: managerAbi } as const;
 const hook = { address: addresses.hook, abi: hookAbi } as const;
@@ -54,11 +60,11 @@ const hook = { address: addresses.hook, abi: hookAbi } as const;
 const BIGINT_KEY = "$bigint";
 
 /** JSON has no bigint, and these values overflow a number. */
-export function encodePool(pool: PoolState) {
-  return JSON.stringify(pool, (_, value) => (typeof value === "bigint" ? { [BIGINT_KEY]: value.toString() } : value));
+export function encodePools(pools: Pools) {
+  return JSON.stringify(pools, (_, value) => (typeof value === "bigint" ? { [BIGINT_KEY]: value.toString() } : value));
 }
 
-export function decodePool(json: string): PoolState {
+export function decodePools(json: string): Pools {
   return JSON.parse(json, (_, value) =>
     typeof value === "object" && value !== null && BIGINT_KEY in value ? BigInt(value[BIGINT_KEY]) : value,
   );
@@ -75,56 +81,78 @@ function aggregateBins(positions: Position[]) {
   return [...totals].map(([bin, liquidity]) => ({ bin, liquidity })).sort((a, b) => a.bin - b.bin);
 }
 
-export async function readWallet(client: PublicClient, wallet: Address): Promise<WalletState> {
+export async function readWallet(client: PublicClient, market: Market, wallet: Address): Promise<WalletState> {
   const token = (address: Address, functionName: "balanceOf" | "allowance", args: readonly Address[]) =>
     ({ address, abi: erc20Abi, functionName, args }) as never;
-  const { weth, usdc, manager: m, swapRouter: r } = addresses;
-  const [wethBal, usdcBal, mWeth, mUsdc, rWeth, rUsdc] = (await client.multicall({
+  const { usdc, manager: m, swapRouter: r } = addresses;
+  const base = market.token;
+  const [baseBal, usdcBal, mBase, mUsdc, rBase, rUsdc] = (await client.multicall({
     allowFailure: false,
     contracts: [
-      token(weth, "balanceOf", [wallet]),
+      token(base, "balanceOf", [wallet]),
       token(usdc, "balanceOf", [wallet]),
-      token(weth, "allowance", [wallet, m]),
+      token(base, "allowance", [wallet, m]),
       token(usdc, "allowance", [wallet, m]),
-      token(weth, "allowance", [wallet, r]),
+      token(base, "allowance", [wallet, r]),
       token(usdc, "allowance", [wallet, r]),
     ],
   })) as bigint[];
   return {
-    weth: wethBal,
+    base: baseBal,
     usdc: usdcBal,
-    managerAllowanceWeth: mWeth,
+    managerAllowanceBase: mBase,
     managerAllowanceUsdc: mUsdc,
-    routerAllowanceWeth: rWeth,
+    routerAllowanceBase: rBase,
     routerAllowanceUsdc: rUsdc,
   };
 }
 
-export async function readPool(client: PublicClient, wallet?: Address): Promise<PoolState> {
-  const [slot0, feePips, stableTick, snapshots] = await client.multicall({
-    allowFailure: false,
-    contracts: [
-      { address: STATE_VIEW, abi: stateViewAbi, functionName: "getSlot0", args: [POOL_ID] },
-      { ...hook, functionName: "currentFee", args: [POOL_ID] },
-      { ...hook, functionName: "stableTick", args: [POOL_ID] },
-      { ...manager, functionName: "automationSnapshot", args: [1n, PAGE] },
-    ],
-  });
-  const tick = slot0[1];
+async function readSnapshots(client: PublicClient) {
+  const last = await client.readContract({ ...manager, functionName: "lastPositionId" });
+  const pages = Array.from({ length: Math.ceil(Number(last) / Number(PAGE)) }, (_, i) =>
+    client.readContract({ ...manager, functionName: "automationSnapshot", args: [BigInt(i) * PAGE + 1n, PAGE] }),
+  );
+  return (await Promise.all(pages)).flat();
+}
 
-  const ids = snapshots.map((s) => s.positionId);
+/** The listed markets, then the community markets with the newest first. */
+export async function readMarkets(client: PublicClient): Promise<Market[]> {
+  if (!REGISTRY) return MARKETS;
+  const registry = { address: REGISTRY, abi: registryAbi } as const;
+  const count = await client.readContract({ ...registry, functionName: "count" });
+  const offset = count > COMMUNITY_SHOWN ? count - COMMUNITY_SHOWN : 0n;
+  const listings = await client.readContract({ ...registry, functionName: "page", args: [offset, COMMUNITY_SHOWN] });
+  return [...MARKETS, ...listings.map((listing) => communityMarket(listing as Parameters<typeof communityMarket>[0])).reverse()];
+}
+
+/** Reads every market at once. Positions in pools this app does not list are left out. */
+export async function readPools(client: PublicClient): Promise<Pools> {
+  const markets = await readMarkets(client);
+  const [states, snapshots] = await Promise.all([
+    client.multicall({
+      allowFailure: false,
+      contracts: markets.flatMap(({ poolId }) => [
+        { address: STATE_VIEW, abi: stateViewAbi, functionName: "getSlot0", args: [poolId] },
+        { ...hook, functionName: "currentFee", args: [poolId] },
+        { ...hook, functionName: "stableTick", args: [poolId] },
+      ]),
+    }),
+    readSnapshots(client),
+  ]);
+
   const details = await client.multicall({
     allowFailure: false,
-    contracts: ids.flatMap((id) => [
-      { ...manager, functionName: "getBinLiquidity", args: [id] },
-      { ...manager, functionName: "getPosition", args: [id] },
+    contracts: snapshots.flatMap((s) => [
+      { ...manager, functionName: "getBinLiquidity", args: [s.positionId] },
+      { ...manager, functionName: "getPosition", args: [s.positionId] },
     ]),
   });
 
-  const positions: Position[] = snapshots.map((s, i) => {
+  const positions = snapshots.map((s, i) => {
     const bins = details[i * 2] as unknown as readonly bigint[];
     const stored = details[i * 2 + 1] as unknown as { strategy: number };
-    return {
+    const baseIsToken0 = markets.find((m) => m.poolId === s.poolId)?.baseIsToken0 ?? true;
+    const position: Position = {
       id: s.positionId,
       owner: s.owner,
       lowerBin: s.lowerBin,
@@ -134,25 +162,32 @@ export async function readPool(client: PublicClient, wallet?: Address): Promise<
       autoRebalance: s.autoRebalance,
       inRange: s.inRange,
       successorLowerBin: s.successorLowerBin,
-      pendingWeth: WETH_IS_TOKEN0 ? s.pending0 : s.pending1,
-      pendingUsdc: WETH_IS_TOKEN0 ? s.pending1 : s.pending0,
-      idleWeth: WETH_IS_TOKEN0 ? s.idle0 : s.idle1,
-      idleUsdc: WETH_IS_TOKEN0 ? s.idle1 : s.idle0,
+      pendingBase: baseIsToken0 ? s.pending0 : s.pending1,
+      pendingUsdc: baseIsToken0 ? s.pending1 : s.pending0,
+      idleBase: baseIsToken0 ? s.idle0 : s.idle1,
+      idleUsdc: baseIsToken0 ? s.idle1 : s.idle0,
       nextRebalanceAt: s.nextRebalanceAt,
       bins,
     };
+    return { poolId: s.poolId, position };
   });
 
-  return {
-    tick,
-    usd: tickToUsd(tick, WETH_IS_TOKEN0),
-    activeBin: binOf(tick),
-    feePips,
-    stableTick,
-    wethIsToken0: WETH_IS_TOKEN0,
-    positions,
-    bins: aggregateBins(positions),
-    wallet: wallet ? await readWallet(client, wallet) : null,
-  };
+  const pools: Pools = {};
+  markets.forEach((market, i) => {
+    const slot0 = states[i * 3] as readonly [bigint, number, number, number];
+    const tick = slot0[1];
+    const mine = positions.filter((p) => p.poolId === market.poolId).map((p) => p.position);
+    pools[market.id] = {
+      market,
+      tick,
+      usd: tickToUsd(tick, market),
+      activeBin: binOf(tick),
+      feePips: states[i * 3 + 1] as number,
+      stableTick: states[i * 3 + 2] as number,
+      positions: mine,
+      bins: aggregateBins(mine),
+      wallet: null,
+    };
+  });
+  return pools;
 }
-

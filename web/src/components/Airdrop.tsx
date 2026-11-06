@@ -3,14 +3,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
-import { addresses } from "@/lib/addresses";
 import type { AirdropKind } from "@/lib/airdrop";
+import { DEFAULT_MARKET, type Market } from "@/lib/markets";
+import { showNotice } from "@/lib/notice";
 
-const AMOUNTS = "10 tWETH and 25,000 tUSDC";
 const NOTE_MS = 6_000;
 
 /** Per deployment, so a fresh devnet gives a wallet its first airdrop again. */
-const flagKey = (address: string) => `binstep:airdrop:${addresses.weth}:${address.toLowerCase()}`;
+const flagKey = (address: string) => `binstep:airdrop:${DEFAULT_MARKET.token}:${address.toLowerCase()}`;
 
 function alreadyDropped(address: string) {
   try {
@@ -26,12 +26,14 @@ function markDropped(address: string) {
   } catch {}
 }
 
-export function AirdropButton() {
-  const { address } = useAccount();
+const sentTitle = (market: Market | null) =>
+  market ? `Sent ${Number(market.airdrop).toLocaleString("en-US")} ${market.symbol} and 25,000 tUSDC` : "Sent 25,000 tUSDC";
+
+/** With no market, it sends only tUSDC. */
+export function useAirdrop(market: Market | null) {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const started = useRef(new Set<string>());
 
   const drop = useCallback(
     async (to: string, kind: AirdropKind) => {
@@ -41,13 +43,15 @@ export function AirdropButton() {
         const res = await fetch("/api/airdrop", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address: to, kind }),
+          body: JSON.stringify({ address: to, kind, market: market?.id }),
         });
         const body = await res.json();
         if (kind === "first" && res.ok) markDropped(to);
         if (!res.ok) setNote(body.error ?? "Airdrop failed");
-        else if (body.sent) setNote(`Sent ${AMOUNTS}`);
-        else setNote(body.reason === "capped" ? "You already have plenty of test tokens" : null);
+        else {
+          setNote(body.reason === "capped" ? "You already have plenty of test tokens" : null);
+          if (body.sent) showNotice(sentTitle(market), body.hash);
+        }
         await queryClient.invalidateQueries({ queryKey: ["pool"] });
       } catch {
         setNote("Airdrop failed. Try again.");
@@ -55,8 +59,23 @@ export function AirdropButton() {
         setBusy(false);
       }
     },
-    [queryClient],
+    [market, queryClient],
   );
+
+  useEffect(() => {
+    if (!note || busy) return;
+    const timer = setTimeout(() => setNote(null), NOTE_MS);
+    return () => clearTimeout(timer);
+  }, [note, busy]);
+
+  return { drop, busy, note };
+}
+
+/** Gives a new wallet tokens and gas when it first connects. */
+export function FirstAirdrop() {
+  const { address } = useAccount();
+  const { drop, note } = useAirdrop(DEFAULT_MARKET);
+  const started = useRef(new Set<string>());
 
   useEffect(() => {
     if (!address || started.current.has(address) || alreadyDropped(address)) return;
@@ -64,11 +83,13 @@ export function AirdropButton() {
     drop(address, "first");
   }, [address, drop]);
 
-  useEffect(() => {
-    if (!note || busy) return;
-    const timer = setTimeout(() => setNote(null), NOTE_MS);
-    return () => clearTimeout(timer);
-  }, [note, busy]);
+  return address ? <span aria-live="polite" className="text-xs text-muted">{note}</span> : null;
+}
+
+/** Sends both of one market's test tokens. */
+export function AirdropButton({ market }: { market: Market }) {
+  const { address } = useAccount();
+  const { drop, busy, note } = useAirdrop(market);
 
   if (!address) return null;
   return (
@@ -77,11 +98,11 @@ export function AirdropButton() {
         {note}
       </span>
       <button
-        className="rounded-md border border-line px-3 py-1.5 text-sm hover:border-muted disabled:text-muted"
+        className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted disabled:text-muted"
         disabled={busy}
         onClick={() => drop(address, "more")}
       >
-        {busy ? "Sending…" : "Airdrop tokens"}
+        {busy ? "Sending…" : `Airdrop ${market.symbol} + tUSDC`}
       </button>
     </>
   );

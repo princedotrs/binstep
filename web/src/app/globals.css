@@ -11,7 +11,7 @@
   --color-accent: #7c6cff;
   --color-accent2: #e45ccb;
   --color-on-accent: #0a0b18;
-  --color-weth: #ff7db8;
+  --color-asset: #ff7db8;
   --color-usdc: #6e9bff;
   --color-now: #ffffff;
   --color-good: #4fe0b0;
@@ -76,8 +76,8 @@ input[inputmode="decimal"]:focus-visible {
 .chart-col.usdc {
   --c: var(--color-usdc);
 }
-.chart-col.weth {
-  --c: var(--color-weth);
+.chart-col.base {
+  --c: var(--color-asset);
 }
 .chart-pool,
 .chart-mine {
@@ -149,6 +149,18 @@ input[inputmode="decimal"]:focus-visible {
   transform: scale(1.14);
 }
 
+.tx-notice {
+  box-shadow: 0 8px 30px #0008;
+  animation: tx-notice-in 0.18s ease-out;
+}
+
+@keyframes tx-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 .hero-bar {
   --c: var(--color-usdc);
   flex: 1;
@@ -163,5 +175,8 @@ input[inputmode="decimal"]:focus-visible {
   .chart-mine,
   .hero-bar {
     transition: none;
+  }
+  .tx-notice {
+    animation: none;
   }
 }

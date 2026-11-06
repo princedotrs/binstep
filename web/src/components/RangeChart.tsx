@@ -5,7 +5,7 @@ import { MAX_BINS } from "@/lib/addresses";
 import { price, usd } from "@/lib/format";
 import { poolLiquidity, shapeCurve, strategyWeights, successorBin, type Strategy } from "@/lib/math";
 import type { PoolState } from "@/lib/read";
-import { binAtOffset, edgeUsd, type Range } from "@/lib/range";
+import { binAtOffset, edgeUsd, lowerBinOf, type Range } from "@/lib/range";
 
 /** Bins shown either side of the price. */
 export const REACH = 40;
@@ -84,15 +84,15 @@ function Watermark({ strategy, left, width }: { strategy: Strategy; left: number
 export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, depositUsd, autoRebalance }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
-  const { activeBin, wethIsToken0: flip } = pool;
+  const { activeBin, market: pair } = pool;
   const { lo, hi } = range;
   const n = hi - lo + 1;
   const eff = scrub;
 
   const liquidityByOffset = useMemo(() => {
     const byBin = new Map(pool.bins.map((b) => [b.bin, b.liquidity]));
-    return Array.from({ length: COLUMNS }, (_, i) => byBin.get(binAtOffset(activeBin, i - REACH, flip)) ?? 0n);
-  }, [pool.bins, activeBin, flip]);
+    return Array.from({ length: COLUMNS }, (_, i) => byBin.get(binAtOffset(activeBin, i - REACH, pair)) ?? 0n);
+  }, [pool.bins, activeBin, pair]);
   const peak = liquidityByOffset.reduce((max, l) => (l > max ? l : max), 1n);
   const weights = strategyWeights(strategy, n);
   const heaviest = Math.max(...weights);
@@ -142,20 +142,20 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
   const right = percentOf(hi + 1);
   const close = right - left < 13;
 
-  const lowerBin = flip ? activeBin + lo : activeBin - hi;
+  const lowerBin = lowerBinOf(activeBin, range, pair);
   const inRange = eff >= lo && eff <= hi;
-  const successor = successorBin(lowerBin, n, binAtOffset(activeBin, eff, flip));
+  const successor = successorBin(lowerBin, n, binAtOffset(activeBin, eff, pair));
   const ghostLo = eff > hi ? eff - n : eff + 1;
   const showGhost = !inRange && autoRebalance && successor !== null && ghostLo >= -REACH && ghostLo + n <= REACH;
-  const held = eff > hi ? "tUSDC" : "tWETH";
-  const scrubPercent = (edgeUsd(activeBin, eff, flip) / edgeUsd(activeBin, 0, flip) - 1) * 100;
+  const held = eff > hi ? "tUSDC" : pair.symbol;
+  const scrubPercent = (edgeUsd(activeBin, eff, pair) / edgeUsd(activeBin, 0, pair) - 1) * 100;
 
   const hovered = hover === null ? null : (() => {
-    const bin = binAtOffset(activeBin, hover, flip);
+    const bin = binAtOffset(activeBin, hover, pair);
     const liquidity = liquidityByOffset[hover + REACH];
-    const amounts = poolLiquidity([{ bin, liquidity }], pool.tick, flip);
+    const amounts = poolLiquidity([{ bin, liquidity }], pool.tick, pair);
     const yours = hover >= lo && hover <= hi ? (depositUsd * weights[hover - lo]) / total : 0;
-    return { at: edgeUsd(activeBin, hover, flip), pool: amounts.weth * pool.usd + amounts.usdc, yours };
+    return { at: edgeUsd(activeBin, hover, pair), pool: amounts.base * pool.usd + amounts.usdc, yours };
   })();
 
   return (
@@ -165,7 +165,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
         <div className="flex gap-3 text-xs text-muted">
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-usdc" />tUSDC</span>
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-now" />Price</span>
-          <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-weth" />tWETH</span>
+          <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-asset" />{pair.symbol}</span>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
             const offset = i - REACH;
             const base = (Number((liquidity * 10_000n) / peak) / 10_000) * POOL_HEIGHT * 100;
             const mine = offset >= lo && offset <= hi ? (weights[offset - lo] / heaviest) * MINE_HEIGHT * size * 100 : 0;
-            const side = offset < eff ? "usdc" : offset > eff ? "weth" : "";
+            const side = offset < eff ? "usdc" : offset > eff ? "base" : "";
             return (
               <div key={offset} className={`chart-col ${side} ${offset === hover ? "hover" : ""}`}>
                 <div className="chart-pool" style={{ height: `${base}%` }} />
@@ -227,7 +227,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
             className={`pointer-events-none absolute top-2 z-4 rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11.5px] font-medium whitespace-nowrap ${side}`}
             style={{ left: `${clamp(edge, 5, 95)}%` }}
           >
-            {price(edgeUsd(activeBin, offset, flip))}
+            {price(edgeUsd(activeBin, offset, pair))}
           </span>
         ))}
 
@@ -238,7 +238,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
           aria-valuemin={-REACH}
           aria-valuemax={REACH}
           aria-valuenow={lo}
-          aria-valuetext={price(edgeUsd(activeBin, lo, flip))}
+          aria-valuetext={price(edgeUsd(activeBin, lo, pair))}
           className="chart-handle"
           style={{ left: `${left}%` }}
           onKeyDown={keys(setLow, lo)}
@@ -253,7 +253,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
           aria-valuemin={-REACH}
           aria-valuemax={REACH}
           aria-valuenow={hi + 1}
-          aria-valuetext={price(edgeUsd(activeBin, hi + 1, flip))}
+          aria-valuetext={price(edgeUsd(activeBin, hi + 1, pair))}
           className="chart-handle"
           style={{ left: `${right}%` }}
           onKeyDown={keys(setHigh, hi)}
@@ -276,7 +276,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
 
       <div className="mt-1.5 flex justify-between font-mono text-xs text-muted">
         {[-REACH, -REACH / 2, 0, REACH / 2, REACH].map((offset, i) => (
-          <span key={offset} className={i % 2 ? "hidden sm:inline" : ""}>{price(edgeUsd(activeBin, offset, flip))}</span>
+          <span key={offset} className={i % 2 ? "hidden sm:inline" : ""}>{price(edgeUsd(activeBin, offset, pair))}</span>
         ))}
       </div>
       <p className="mt-1 text-xs text-faint">Your bars are enlarged so they stay visible. Hover a bin for exact amounts.</p>
@@ -293,7 +293,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
           onChange={(e) => onScrub(Number(e.target.value))}
         />
         <span className="font-mono text-xs sm:min-w-34 sm:text-right">
-          {scrub === 0 ? "No move" : `${scrubPercent >= 0 ? "+" : ""}${scrubPercent.toFixed(1)}% → ${price(edgeUsd(activeBin, eff, flip))}`}
+          {scrub === 0 ? "No move" : `${scrubPercent >= 0 ? "+" : ""}${scrubPercent.toFixed(1)}% → ${price(edgeUsd(activeBin, eff, pair))}`}
         </span>
       </div>
       <p className="mt-2 flex items-start gap-2 text-sm">

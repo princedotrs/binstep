@@ -22,10 +22,13 @@ const connectedWallet = custom({
   },
 });
 
+/** A fork fetches cold state from upstream, which outlasts the default 10 second timeout. */
+const DEVNET_TIMEOUT_MS = 60_000;
+
 const config = createConfig({
   chains: [chain],
   connectors: DEVNET ? [mock({ accounts: [DEV_WALLET], features: { reconnect: true } }), injected()] : [injected()],
-  transports: { [chain.id]: DEVNET ? http(RPC_URL) : connectedWallet },
+  transports: { [chain.id]: DEVNET ? http(RPC_URL, { timeout: DEVNET_TIMEOUT_MS }) : connectedWallet },
   ssr: true,
 });
 

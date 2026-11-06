@@ -1,12 +1,17 @@
 import { erc20Abi, maxUint256, type Address } from "viem";
-import { managerAbi, swapRouterAbi } from "./abi";
-import { TICK_GUARD, WETH_IS_TOKEN0, addresses, poolKey } from "./addresses";
+import { managerAbi, registryAbi, swapRouterAbi } from "./abi";
+import { TICK_GUARD, addresses } from "./addresses";
+import { poolKeyOf, type Market } from "./markets";
 import type { Strategy } from "./math";
 
 /** Stops a swap about 3% from the price, so one trade cannot empty the test pool. */
 export const SWAP_LIMIT_TICKS = 300;
 
 const sqrtPriceAtTick = (tick: number) => BigInt(Math.floor(1.0001 ** (tick / 2) * 2 ** 96));
+
+export function createCall(registry: Address, name: string, symbol: string, priceE6: bigint) {
+  return { address: registry, abi: registryAbi, functionName: "create", args: [name, symbol, priceE6] } as const;
+}
 
 export function approveCall(token: Address, spender: Address) {
   return { address: token, abi: erc20Abi, functionName: "approve", args: [spender, maxUint256] } as const;
@@ -15,10 +20,11 @@ export function approveCall(token: Address, spender: Address) {
 const guard = (tick: number) => [tick - TICK_GUARD, tick + TICK_GUARD] as const;
 
 export function mintCall(p: {
+  market: Market;
   lowerBin: number;
   numBins: number;
   strategy: Strategy;
-  wethAmount: bigint;
+  baseAmount: bigint;
   usdcAmount: bigint;
   tick: number;
   autoCompound: boolean;
@@ -31,12 +37,12 @@ export function mintCall(p: {
     functionName: "mint",
     args: [
       {
-        key: poolKey,
+        key: poolKeyOf(p.market),
         lowerBin: p.lowerBin,
         numBins: p.numBins,
         strategy: p.strategy,
-        amount0Max: WETH_IS_TOKEN0 ? p.wethAmount : p.usdcAmount,
-        amount1Max: WETH_IS_TOKEN0 ? p.usdcAmount : p.wethAmount,
+        amount0Max: p.market.baseIsToken0 ? p.baseAmount : p.usdcAmount,
+        amount1Max: p.market.baseIsToken0 ? p.usdcAmount : p.baseAmount,
         minTick,
         maxTick,
         autoCompound: p.autoCompound,
@@ -46,14 +52,15 @@ export function mintCall(p: {
   } as const;
 }
 
-export function swapCall({ sell, amount, tick }: { sell: "weth" | "usdc"; amount: bigint; tick: number }) {
-  const zeroForOne = (sell === "weth") === WETH_IS_TOKEN0;
+export function swapCall(p: { market: Market; sell: "base" | "usdc"; amount: bigint; tick: number }) {
+  const { sell, amount, tick } = p;
+  const zeroForOne = (sell === "base") === p.market.baseIsToken0;
   return {
     address: addresses.swapRouter,
     abi: swapRouterAbi,
     functionName: "swap",
     args: [
-      poolKey,
+      poolKeyOf(p.market),
       {
         zeroForOne,
         amountSpecified: -amount,

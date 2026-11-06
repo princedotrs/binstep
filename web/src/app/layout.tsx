@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { Header } from "@/components/Header";
+import { TxNotice } from "@/components/TxNotice";
 import { DEVNET } from "@/lib/addresses";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-dvh">
         <Providers>
           <Header />
+          <TxNotice />
           <main className="mx-auto w-full max-w-7xl px-4 py-6">{children}</main>
           <footer className="mx-auto w-full max-w-7xl px-4 pb-8 text-xs leading-relaxed text-muted">
             {DEVNET ? (

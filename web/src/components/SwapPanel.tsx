@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { USDC_DECIMALS, WETH_DECIMALS, addresses } from "@/lib/addresses";
-import { feePercent, price, token } from "@/lib/format";
+import { USDC_DECIMALS, addresses } from "@/lib/addresses";
+import { feePercent, price, priceDigits, token } from "@/lib/format";
 import { useTransactions } from "@/lib/hooks";
 import type { PoolState } from "@/lib/read";
 import { SWAP_LIMIT_TICKS, approveCall, swapCall } from "@/lib/tx";
@@ -11,35 +11,39 @@ import { parseAmount, swapBlocker } from "@/lib/validate";
 import { formatUnits } from "viem";
 import { AmountField, FlipIcon, Primary } from "./ui";
 
-const TOKENS = {
-  weth: { name: "tWETH", dot: "bg-weth", decimals: WETH_DECIMALS, shownDecimals: 6, address: addresses.weth },
-  usdc: { name: "tUSDC", dot: "bg-usdc", decimals: USDC_DECIMALS, shownDecimals: 2, address: addresses.usdc },
-} as const;
+const USDC = { name: "tUSDC", dot: "bg-usdc", decimals: USDC_DECIMALS, shownDecimals: 2, address: addresses.usdc };
 
 export function SwapPanel({ pool }: { pool: PoolState }) {
   const { address } = useAccount();
   const { run, busy, error } = useTransactions();
-  const [sell, setSell] = useState<"weth" | "usdc">("weth");
+  const { market } = pool;
+  const tokens = {
+    base: { name: market.symbol, dot: "bg-asset", decimals: market.baseDecimals, shownDecimals: 6, address: market.token },
+    usdc: USDC,
+  };
+  const [sell, setSell] = useState<"base" | "usdc">("base");
   const [amount, setAmount] = useState("");
 
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("from") === TOKENS.usdc.name) setSell("usdc");
+    if (new URLSearchParams(location.search).get("from") === USDC.name) setSell("usdc");
   }, []);
 
-  const buy = sell === "weth" ? "usdc" : "weth";
-  const from = TOKENS[sell];
-  const to = TOKENS[buy];
+  const buy = sell === "base" ? "usdc" : "base";
+  const from = tokens[sell];
+  const to = tokens[buy];
   const wallet = pool.wallet;
-  const balances = { weth: wallet?.weth ?? 0n, usdc: wallet?.usdc ?? 0n };
+  const balances = { base: wallet?.base ?? 0n, usdc: wallet?.usdc ?? 0n };
   const balance = balances[sell];
-  const allowance = wallet ? (sell === "weth" ? wallet.routerAllowanceWeth : wallet.routerAllowanceUsdc) : 0n;
+  const allowance = wallet ? (sell === "base" ? wallet.routerAllowanceBase : wallet.routerAllowanceUsdc) : 0n;
   const parsed = parseAmount(amount, from.decimals);
-  const blocker = !address ? "Connect a wallet" : swapBlocker(amount, from.decimals, balance);
+  // A swap with nothing to fill it trades nothing and still moves the price to its limit.
+  const empty = !pool.bins.some(({ liquidity }) => liquidity > 0n);
+  const blocker = empty ? "No liquidity yet" : !address ? "Connect a wallet" : swapBlocker(amount, from.decimals, balance);
 
   const value = Number(amount) || 0;
-  const estimate = (sell === "weth" ? value * pool.usd : value / pool.usd) * (1 - pool.feePips / 1e6);
+  const estimate = (sell === "base" ? value * pool.usd : value / pool.usd) * (1 - pool.feePips / 1e6);
   const receive = estimate > 0 ? String(Number(estimate.toFixed(to.shownDecimals))) : "";
-  const limit = pool.usd * 1.0001 ** (sell === "weth" ? -SWAP_LIMIT_TICKS : SWAP_LIMIT_TICKS);
+  const limit = pool.usd * 1.0001 ** (sell === "base" ? -SWAP_LIMIT_TICKS : SWAP_LIMIT_TICKS);
 
   const flip = () => {
     setSell(buy);
@@ -51,9 +55,9 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
     if (!parsed) return;
     const calls = [
       ...(allowance < parsed ? [approveCall(from.address, addresses.swapRouter)] : []),
-      swapCall({ sell, amount: parsed, tick: pool.tick }),
+      swapCall({ market, sell, amount: parsed, tick: pool.tick }),
     ];
-    run("Swapping", calls).then(() => setAmount(""));
+    run("Swapping", calls, "Swap confirmed").then((receipt) => receipt && setAmount(""));
   };
 
   const detail = (label: string, text: string) => (
@@ -93,7 +97,7 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
         balance={wallet ? token(balances[buy], to.decimals) : undefined}
       />
       <dl className="my-3 space-y-1.5 text-xs">
-        {detail("Rate", `1 tWETH ≈ ${pool.usd.toLocaleString("en-US", { maximumFractionDigits: 2 })} tUSDC`)}
+        {detail("Rate", `1 ${market.symbol} ≈ ${pool.usd.toLocaleString("en-US", priceDigits(pool.usd))} tUSDC`)}
         {detail("Swap fee", feePercent(pool.feePips))}
         {detail("Stops at", price(limit))}
       </dl>

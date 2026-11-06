@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { AirdropButton } from "./Airdrop";
 import { LiquidityShape } from "./LiquidityShape";
 import { Loading } from "./Loading";
 import { SwapPanel } from "./SwapPanel";
-import { PairIcon, Panel, Stat } from "./ui";
+import { PairIcon, Panel, Stat, UnverifiedNote } from "./ui";
 import { feePercent, price, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
 import type { Market } from "@/lib/markets";
 import type { PoolState } from "@/lib/read";
 
-function MarketPanel({ market, pool }: { market: Market; pool: PoolState }) {
+function MarketPanel({ pool }: { pool: PoolState }) {
+  const { market } = pool;
   const { data: stats } = useStats(pool);
   const legend = (dot: string, label: string) => (
     <span className="flex items-center gap-1.5">
@@ -22,10 +24,10 @@ function MarketPanel({ market, pool }: { market: Market; pool: PoolState }) {
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <PairIcon />
+          <PairIcon symbol={market.symbol} />
           <div>
             <b className="block text-sm font-semibold">{market.name}</b>
-            <small className="text-xs text-muted">Dynamic fee · {market.binWidth} bins</small>
+            <small className="text-xs text-muted">{market.title} · Dynamic fee · {market.binWidth} bins</small>
           </div>
         </div>
         <Link href={market.href} className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted">
@@ -44,7 +46,7 @@ function MarketPanel({ market, pool }: { market: Market; pool: PoolState }) {
           <span className="flex gap-3">
             {legend("bg-usdc", "tUSDC")}
             {legend("bg-now", "Price")}
-            {legend("bg-weth", "tWETH")}
+            {legend("bg-asset", market.symbol)}
           </span>
         </div>
         <LiquidityShape pool={pool} reach={30} className="h-56 w-full" />
@@ -54,11 +56,17 @@ function MarketPanel({ market, pool }: { market: Market; pool: PoolState }) {
 }
 
 export function SwapView({ market }: { market: Market }) {
-  const { data: pool, isError } = usePool();
+  const { data: pool, isError } = usePool(market);
   if (!pool) return <Loading error={isError} />;
   return (
     <div className="space-y-3.5">
-      <Link href="/" className="inline-block text-sm text-muted hover:text-text">← All markets</Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/swap" className="text-sm text-muted hover:text-text">← All markets</Link>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AirdropButton market={market} />
+        </div>
+      </div>
+      <UnverifiedNote market={market} />
       <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="lg:order-last">
           <Panel>
@@ -66,7 +74,7 @@ export function SwapView({ market }: { market: Market }) {
             <SwapPanel pool={pool} />
           </Panel>
         </div>
-        <MarketPanel market={market} pool={pool} />
+        <MarketPanel pool={pool} />
       </div>
     </div>
   );

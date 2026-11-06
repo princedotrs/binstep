@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { COMMUNITY, type Market } from "@/lib/markets";
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
@@ -105,11 +106,23 @@ export function Stat({ label, value, tone }: { label: string; value: ReactNode; 
   );
 }
 
-export function PairIcon() {
+/** Skips the t of a listed test token, as in tWETH. */
+const iconLetter = (symbol: string) => (symbol[0] === "t" && symbol[1] ? symbol[1] : symbol[0]);
+
+export function UnverifiedNote({ market }: { market: Market }) {
+  if (market.category !== COMMUNITY) return null;
+  return (
+    <p className="rounded-lg border border-warn/40 bg-warn/5 px-3 py-2 text-xs text-warn">
+      Community market. Anyone can create one, so its name and price are unverified.
+    </p>
+  );
+}
+
+export function PairIcon({ symbol }: { symbol: string }) {
   return (
     <span className="flex" aria-hidden>
-      <i className="grid h-6.5 w-6.5 place-items-center rounded-full border-2 border-panel bg-weth font-mono text-[10px] font-semibold text-ink not-italic">
-        W
+      <i className="grid h-6.5 w-6.5 place-items-center rounded-full border-2 border-panel bg-asset font-mono text-[10px] font-semibold text-ink not-italic">
+        {iconLetter(symbol)}
       </i>
       <i className="-ml-2 grid h-6.5 w-6.5 place-items-center rounded-full border-2 border-panel bg-usdc font-mono text-[10px] font-semibold text-ink not-italic">
         U

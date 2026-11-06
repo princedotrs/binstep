@@ -7,7 +7,6 @@ const config: NextConfig = {
   async redirects() {
     return [
       { source: "/pool", destination: DEFAULT_MARKET.href, permanent: false },
-      { source: "/swap", destination: DEFAULT_MARKET.swapHref, permanent: false },
     ];
   },
 };

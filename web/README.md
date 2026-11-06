@@ -3,8 +3,16 @@
 The app for the live Base Sepolia pool: browse markets, see the bins, swap, create
 Spot, Curve or Bid-Ask positions, and manage them.
 
-The homepage lists the markets in `src/lib/markets.ts`. Each has a `/pool/<id>` and a
-`/swap/<id>` page. Only tWETH / tUSDC is deployed, and `usePool` reads that one pool.
+The homepage lists the markets in `src/lib/markets.ts` that appear in the deployment file.
+Each has a `/pool/<id>` and a `/swap/<id>` page. `../scripts/deploy-markets.sh` adds the test
+markets in `contracts/script/DeployMarkets.s.sol`, which share the hook and manager.
+
+`/create` lets anyone create a test token and its tUSDC pool through `BinStepRegistry`, which
+`../scripts/deploy-registry.sh` deploys. These appear under Community as unverified, with the
+token address as the id.
+
+Every pool can use auto-compound and auto-rebalance. See `../cre/README.md` for what must be
+running for them to act.
 Volume, fees and APR come from the last 43,200 blocks of swap logs. `/api/stats` scans
 them on the server and caches the totals, because the public RPC only serves 200 blocks
 of logs per request. No wallet address is involved.
@@ -42,8 +50,9 @@ Not covered by Anon-RPC:
 
 ## Airdrop
 
-A new wallet gets 10 tWETH, 25,000 tUSDC and 0.0003 test ETH when it first connects.
-The header button sends more, until a wallet holds ten airdrops of both tokens.
+A new wallet gets 10 tWETH and 25,000 tUSDC when it first connects. Each market's button
+sends its token and tUSDC, until a wallet holds ten airdrops of both. An airdrop adds 0.0003
+test ETH only when the wallet holds no ETH at all.
 
 `/api/airdrop` signs with `AIRDROP_PRIVATE_KEY`, in `.env.local`. Use a dedicated
 wallet holding only test ETH. It needs no rights on any contract, because the test

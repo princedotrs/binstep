@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { decodePool, encodePool, type PoolState } from "./read";
+import { DEFAULT_MARKET } from "./markets";
+import { decodePools, encodePools, type PoolState } from "./read";
 
 const pool = {
   tick: -76_930,
@@ -7,7 +8,7 @@ const pool = {
   activeBin: -7693,
   feePips: 1000,
   stableTick: -76_930,
-  wethIsToken0: true,
+  market: DEFAULT_MARKET,
   positions: [
     {
       id: 7n,
@@ -19,9 +20,9 @@ const pool = {
       autoRebalance: false,
       inRange: true,
       successorLowerBin: -7700,
-      pendingWeth: 123456789012345678901234n,
+      pendingBase: 123456789012345678901234n,
       pendingUsdc: 0n,
-      idleWeth: 1n,
+      idleBase: 1n,
       idleUsdc: 2n,
       nextRebalanceAt: 1793958644n,
       bins: [5n, 340282366920938463463374607431768211455n],
@@ -32,11 +33,12 @@ const pool = {
 } satisfies PoolState;
 
 test("pool state survives the trip from server to browser", () => {
-  expect(decodePool(encodePool(pool))).toEqual(pool);
+  expect(decodePools(encodePools({ [DEFAULT_MARKET.id]: pool }))[DEFAULT_MARKET.id]).toEqual(pool);
 });
 
 test("only encoded bigints become bigints", () => {
   const plain = { ...pool, positions: [], bins: [], tick: 12 };
-  expect(decodePool(JSON.stringify({ ...plain, note: "12n" })).tick).toBe(12);
-  expect((decodePool(JSON.stringify({ ...plain, note: "12n" })) as unknown as { note: string }).note).toBe("12n");
+  const decoded = decodePools(JSON.stringify({ pool: { ...plain, note: "12n" } })).pool;
+  expect(decoded.tick).toBe(12);
+  expect((decoded as unknown as { note: string }).note).toBe("12n");
 });
