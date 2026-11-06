@@ -25,6 +25,22 @@ export function binToUsd(bin: number, wethIsToken0: boolean): number {
   return tickToUsd(bin * TICK_SPACING, wethIsToken0);
 }
 
+/** Token amounts behind bin liquidity, using the standard v4 range formulas. */
+export function poolLiquidity(bins: { bin: number; liquidity: bigint }[], tick: number, wethIsToken0: boolean) {
+  const sqrtAt = (t: number) => TICK_BASE ** (t / 2);
+  const now = sqrtAt(tick);
+  let raw0 = 0;
+  let raw1 = 0;
+  for (const { bin, liquidity } of bins) {
+    const lower = sqrtAt(bin * TICK_SPACING);
+    const upper = sqrtAt((bin + 1) * TICK_SPACING);
+    const inner = Math.min(Math.max(now, lower), upper);
+    raw0 += Number(liquidity) * (1 / inner - 1 / upper);
+    raw1 += Number(liquidity) * (inner - lower);
+  }
+  return wethIsToken0 ? { weth: raw0 / 1e18, usdc: raw1 / 1e6 } : { weth: raw1 / 1e18, usdc: raw0 / 1e6 };
+}
+
 /** Mirrors StrategyLib.weights in the contracts. */
 export function strategyWeights(strategy: Strategy, n: number): number[] {
   return Array.from({ length: n }, (_, i) => {

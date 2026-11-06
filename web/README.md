@@ -1,7 +1,9 @@
 # BinStep web
 
-The app for the live Base Sepolia pool: see the bins, swap, create Spot, Curve or
-Bid-Ask positions, and manage them.
+The app for the live Base Sepolia pool: browse markets, see the bins, swap, create
+Spot, Curve or Bid-Ask positions, and manage them.
+
+The homepage lists the markets in `src/lib/markets.ts`. Only tWETH / tUSDC is deployed.
 
 ```bash
 npm install

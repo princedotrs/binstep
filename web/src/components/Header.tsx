@@ -49,8 +49,8 @@ function WalletButton() {
 
 export function Header() {
   const path = usePathname();
-  const link = (href: string, label: string) => (
-    <Link href={href} className={`text-sm ${path === href ? "text-text" : "text-muted hover:text-text"}`}>
+  const link = (href: string, label: string, active = path === href) => (
+    <Link href={href} className={`text-sm ${active ? "text-text" : "text-muted hover:text-text"}`}>
       {label}
     </Link>
   );
@@ -62,7 +62,7 @@ export function Header() {
             bin<span className="text-weth">step</span>
           </Link>
           <nav className="flex items-center gap-4">
-            {link("/", "Pool")}
+            {link("/", "Markets", path === "/" || path === "/pool")}
             {link("/positions", "Positions")}
           </nav>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">

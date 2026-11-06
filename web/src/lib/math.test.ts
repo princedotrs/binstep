@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { binOf, binToUsd, previewShape, rangeState, strategyWeights, tickToUsd, usdToTick } from "./math";
+import { binOf, binToUsd, poolLiquidity, previewShape, rangeState, strategyWeights, tickToUsd, usdToTick } from "./math";
 
 describe("prices", () => {
   test("a live tick reads as the real price", () => {
@@ -86,5 +86,39 @@ describe("rangeState", () => {
   });
   test("without automation it waits", () => {
     expect(rangeState({ ...base, autoRebalance: false, successorLowerBin: -19950 })).toBe("waiting");
+  });
+});
+
+describe("poolLiquidity", () => {
+  const L = 10n ** 15n;
+  const WIDTH = 1.0001 ** 5 - 1; // sqrt(1.0001^10) - 1, the sqrt-price width of one bin
+  const near = (a: number, b: number) => expect(Math.abs(a - b) / b).toBeLessThan(1e-6);
+
+  test("a bin above the price holds only token0", () => {
+    const { weth, usdc } = poolLiquidity([{ bin: 5, liquidity: L }], 0, true);
+    expect(usdc).toBe(0);
+    near(weth, (Number(L) * (1 - 1 / (1 + WIDTH)) / 1.0001 ** 25) / 1e18);
+  });
+
+  test("a bin below the price holds only token1", () => {
+    const { weth, usdc } = poolLiquidity([{ bin: -6, liquidity: L }], 0, true);
+    expect(weth).toBe(0);
+    near(usdc, (Number(L) * WIDTH * 1.0001 ** -30) / 1e6);
+  });
+
+  test("the active bin splits at the price", () => {
+    const { weth, usdc } = poolLiquidity([{ bin: 0, liquidity: L }], 5, true);
+    expect(weth).toBeGreaterThan(0);
+    expect(usdc).toBeGreaterThan(0);
+  });
+
+  test("swaps the token names when WETH is token1", () => {
+    const flipped = poolLiquidity([{ bin: 5, liquidity: L }], 0, false);
+    expect(flipped.weth).toBe(0);
+    expect(flipped.usdc).toBeGreaterThan(0);
+  });
+
+  test("an empty pool is zero", () => {
+    expect(poolLiquidity([], 0, true)).toEqual({ weth: 0, usdc: 0 });
   });
 });

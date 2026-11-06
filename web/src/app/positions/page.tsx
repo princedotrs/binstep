@@ -17,7 +17,7 @@ export default function PositionsPage() {
     mine.length > 0
       ? null
       : address
-        ? "This wallet has no positions yet. Create one on the Pool page. These belong to others."
+        ? "This wallet has no positions yet. Open a market to create one. These belong to others."
         : "Connect a wallet to manage your own. These are open to view.";
 
   return (
