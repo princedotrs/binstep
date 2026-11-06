@@ -109,8 +109,8 @@ export async function readPool(client: PublicClient, wallet?: Address): Promise<
   });
 
   const positions: Position[] = snapshots.map((s, i) => {
-    const bins = details[i * 2] as readonly bigint[];
-    const stored = details[i * 2 + 1] as { strategy: number };
+    const bins = details[i * 2] as unknown as readonly bigint[];
+    const stored = details[i * 2 + 1] as unknown as { strategy: number };
     return {
       id: s.positionId,
       owner: s.owner,

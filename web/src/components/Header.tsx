@@ -1,0 +1,76 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { CHAIN_ID } from "@/lib/addresses";
+import { shortAddress } from "@/lib/format";
+import { PrivacyBadge, PrivacyBanner } from "./Privacy";
+
+function WalletButton() {
+  const { address, chainId } = useAccount();
+  const { connect, connectors, isPending, error } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const button = "rounded-md border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted";
+  if (!mounted) return <span className={button}>Connect wallet</span>;
+
+  if (!address) {
+    const wallet = connectors[0];
+    return (
+      <button
+        className={button}
+        disabled={!wallet || isPending}
+        onClick={() => wallet && connect({ connector: wallet })}
+        title={error?.message}
+      >
+        {isPending ? "Connecting…" : "Connect wallet"}
+      </button>
+    );
+  }
+  if (chainId !== CHAIN_ID) {
+    return (
+      <button className={`${button} text-warn`} onClick={() => switchChain({ chainId: CHAIN_ID })}>
+        Switch to Base Sepolia
+      </button>
+    );
+  }
+  return (
+    <button className={`${button} font-mono`} onClick={() => disconnect()} title="Disconnect">
+      {shortAddress(address)}
+    </button>
+  );
+}
+
+export function Header() {
+  const path = usePathname();
+  const link = (href: string, label: string) => (
+    <Link href={href} className={`text-sm ${path === href ? "text-text" : "text-muted hover:text-text"}`}>
+      {label}
+    </Link>
+  );
+  return (
+    <>
+      <header className="border-b border-line">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+          <Link href="/" className="font-mono text-base font-semibold tracking-tight">
+            bin<span className="text-weth">step</span>
+          </Link>
+          <nav className="flex items-center gap-4">
+            {link("/", "Pool")}
+            {link("/positions", "Positions")}
+          </nav>
+          <div className="ml-auto flex items-center gap-2">
+            <PrivacyBadge />
+            <WalletButton />
+          </div>
+        </div>
+      </header>
+      <PrivacyBanner />
+    </>
+  );
+}

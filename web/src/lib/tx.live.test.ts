@@ -25,8 +25,9 @@ test("a mint simulates from a funded wallet", async () => {
 });
 
 test("a swap simulates in both directions", async () => {
-  await client.simulateContract({ ...swapCall({ sell: "weth", amount: parseUnits("0.01", 18) }), account });
-  await client.simulateContract({ ...swapCall({ sell: "usdc", amount: parseUnits("10", 6) }), account });
+  const { tick } = await readPool(client);
+  await client.simulateContract({ ...swapCall({ sell: "weth", amount: parseUnits("0.01", 18), tick }), account });
+  await client.simulateContract({ ...swapCall({ sell: "usdc", amount: parseUnits("10", 6), tick }), account });
 });
 
 test("a position owner can act and a stranger cannot", async () => {

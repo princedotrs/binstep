@@ -5,8 +5,10 @@ import type { Strategy } from "./math";
 
 const mintableAbi = parseAbi(["function mint(address to, uint256 value)"]);
 
-const MIN_SQRT_PRICE_LIMIT = 4295128740n;
-const MAX_SQRT_PRICE_LIMIT = 1461446703485210103287273052203988822378723970341n;
+/** Stops a swap about 3% from the price, so one trade cannot empty the test pool. */
+export const SWAP_LIMIT_TICKS = 300;
+
+const sqrtPriceAtTick = (tick: number) => BigInt(Math.floor(1.0001 ** (tick / 2) * 2 ** 96));
 
 export const FAUCET_WETH = parseUnits("10", 18);
 export const FAUCET_USDC = parseUnits("25000", 6);
@@ -56,7 +58,7 @@ export function mintCall(p: {
   } as const;
 }
 
-export function swapCall({ sell, amount }: { sell: "weth" | "usdc"; amount: bigint }) {
+export function swapCall({ sell, amount, tick }: { sell: "weth" | "usdc"; amount: bigint; tick: number }) {
   const zeroForOne = (sell === "weth") === WETH_IS_TOKEN0;
   return {
     address: addresses.swapRouter,
@@ -67,7 +69,7 @@ export function swapCall({ sell, amount }: { sell: "weth" | "usdc"; amount: bigi
       {
         zeroForOne,
         amountSpecified: -amount,
-        sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_PRICE_LIMIT : MAX_SQRT_PRICE_LIMIT,
+        sqrtPriceLimitX96: sqrtPriceAtTick(zeroForOne ? tick - SWAP_LIMIT_TICKS : tick + SWAP_LIMIT_TICKS),
       },
       { takeClaims: false, settleUsingBurn: false },
       "0x",
