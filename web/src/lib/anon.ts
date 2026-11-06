@@ -26,6 +26,7 @@ type Options = {
 };
 
 const ORDER: WorkerName[] = ["nox", "nym"];
+const SAME_WORKER_RETRIES = 2;
 const PROBE_BODY = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] });
 
 function within<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -92,12 +93,15 @@ export function createAnonRoute({ makeWorker, plainFetch, onStatus, probeTimeout
     if (plain) return plainFetch(url, init);
     if (failed) throw new Error("no private route");
     const worker = await connect();
-    try {
-      return await within(worker.handle.fetch(url, init), probeTimeoutMs);
-    } catch {
-      const next = await replace(worker);
-      return within(next.handle.fetch(url, init), probeTimeoutMs);
+    for (let attempt = 0; attempt <= SAME_WORKER_RETRIES; attempt += 1) {
+      try {
+        return await within(worker.handle.fetch(url, init), probeTimeoutMs);
+      } catch {
+        // A tunnel can drop and reopen, which is far cheaper than a new worker.
+      }
     }
+    const next = await replace(worker);
+    return within(next.handle.fetch(url, init), probeTimeoutMs);
   };
 
   return {

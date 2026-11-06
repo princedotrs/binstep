@@ -2,7 +2,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState, useSyncExternalStore } from "react";
-import { useAccount, useSwitchChain, useWriteContract } from "wagmi";
+import { useAccount, useConfig, useSwitchChain, useWriteContract } from "wagmi";
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { CHAIN_ID } from "./addresses";
 import { readPool, type PoolState } from "./read";
 import { getStatus, readClient, subscribeStatus } from "./route";
@@ -28,6 +29,7 @@ type Call = Parameters<ReturnType<typeof useWriteContract>["writeContractAsync"]
 /** Sends calls in order through the wallet and waits for each one. */
 export function useTransactions() {
   const { chainId, isConnected } = useAccount();
+  const config = useConfig();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const queryClient = useQueryClient();
@@ -42,7 +44,7 @@ export function useTransactions() {
         if (chainId !== CHAIN_ID) await switchChainAsync({ chainId: CHAIN_ID });
         for (const call of calls) {
           const hash = await writeContractAsync(call as Call);
-          await readClient.waitForTransactionReceipt({ hash });
+          await waitForTransactionReceipt(config, { hash, chainId: CHAIN_ID });
         }
         await queryClient.invalidateQueries({ queryKey: ["pool"] });
       } catch (e) {
@@ -52,7 +54,7 @@ export function useTransactions() {
         setBusy(null);
       }
     },
-    [chainId, queryClient, switchChainAsync, writeContractAsync],
+    [chainId, config, queryClient, switchChainAsync, writeContractAsync],
   );
 
   return { run, busy, error, canSend: isConnected };

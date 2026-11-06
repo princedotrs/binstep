@@ -2,14 +2,15 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { WagmiProvider, createConfig, http } from "wagmi";
+import { WagmiProvider, createConfig, unstable_connector } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 
+/** Transactions and their receipts use the wallet's RPC. App reads use the anon route. */
 const config = createConfig({
   chains: [baseSepolia],
   connectors: [injected()],
-  transports: { [baseSepolia.id]: http() },
+  transports: { [baseSepolia.id]: unstable_connector(injected) },
   ssr: true,
 });
 

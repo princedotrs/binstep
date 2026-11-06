@@ -101,6 +101,29 @@ describe("createAnonRoute", () => {
     expect(opened).toEqual(["nox", "nym"]);
   });
 
+  test("retries a brief failure on the same worker", async () => {
+    let calls = 0;
+    const opened: string[] = [];
+    const route = createAnonRoute({
+      makeWorker: async (name) => {
+        opened.push(name);
+        return {
+          fetch: async () => {
+            calls += 1;
+            if (calls === 2) throw new Error("tunnel timeout");
+            return new Response('{"ok":true}');
+          },
+          close: () => {},
+        };
+      },
+      plainFetch: fetch,
+      onStatus: () => {},
+      probeTimeoutMs: 1000,
+    });
+    expect(await (await call(route)).json()).toEqual({ ok: true });
+    expect(opened).toEqual(["nox"]);
+  });
+
   test("reconnects once when a live route breaks", async () => {
     let healthy = true;
     const opened: string[] = [];
