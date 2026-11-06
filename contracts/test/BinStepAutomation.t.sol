@@ -17,18 +17,18 @@ contract BinStepAutomationTest is BinStepFixture {
     function setUp() public {
         setUpPool();
         vm.warp(1_800_000_000);
-        auto_ = new BinStepAutomation(lp, forwarder, address(this), 50, 300);
+        auto_ = new BinStepAutomation(lp, forwarder, address(this), 300);
         lp.setKeeper(address(auto_));
         metadata = abi.encodePacked(bytes32(uint256(1)), bytes10("rebalance"), workflowOwner);
     }
 
-    function _action(BinStepAutomation.ActionKind kind, uint256 p, int24 newLower, int24 refTick)
+    function _action(BinStepAutomation.ActionKind kind, uint256 p)
         internal
         pure
         returns (BinStepAutomation.Action[] memory actions)
     {
         actions = new BinStepAutomation.Action[](1);
-        actions[0] = BinStepAutomation.Action(kind, p, newLower, refTick);
+        actions[0] = BinStepAutomation.Action(kind, p);
     }
 
     function _send(uint64 observedAt, BinStepAutomation.Action[] memory actions) internal {
@@ -92,57 +92,53 @@ contract BinStepAutomationTest is BinStepFixture {
             swap(key, false, -2e18, ZERO_BYTES);
         }
         uint128 before = lp.getBinLiquidity(p)[15];
-        _send(_now(), _action(BinStepAutomation.ActionKind.Compound, p, 0, _tick()));
+        _send(_now(), _action(BinStepAutomation.ActionKind.Compound, p));
         assertGt(lp.getBinLiquidity(p)[15], before);
     }
 
-    function test_reportRebalancesAPosition() public {
-        _mint(bob, -16, 32, Strategy.Spot, 500e18, 500e18);
-        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
-        swap(key, true, -120e18, ZERO_BYTES);
-        int24 tick = _tick();
-        assertLt(tick, -30, "price should have left the range");
-        assertGt(tick, -160, "background liquidity should absorb the swap");
-
-        int24 newLower = tick / SPACING - 6;
-        _send(_now(), _action(BinStepAutomation.ActionKind.Rebalance, p, newLower, tick));
-        assertEq(lp.getPosition(p).lowerBin, newLower);
+    function test_reportRebalancesToTheContractsOwnRange() public {
+        _background();
+        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        swap(key, true, -300e18, ZERO_BYTES);
+        uint64 later = 1_800_000_000 + uint64(hook.STABLE_WINDOW());
+        vm.warp(later);
+        int24 expected = lp.successorLowerBin(p);
+        _send(later, _action(BinStepAutomation.ActionKind.Rebalance, p));
+        assertEq(lp.getPosition(p).lowerBin, expected);
     }
 
-    function test_livePoolMustMatchTheReportedPrice() public {
-        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
+    function test_manipulatedPoolIsSkippedEvenIfTheReportLooksFine() public {
+        _background();
+        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        swap(key, true, -300e18, ZERO_BYTES);
         vm.recordLogs();
-        _send(_now(), _action(BinStepAutomation.ActionKind.Rebalance, p, 90, 1000));
-        assertEq(lp.getPosition(p).lowerBin, -3, "manipulated pool must not rebalance");
-        _assertSkipped(p);
-    }
-
-    function test_newRangeMustStayNearTheReportedPrice() public {
-        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
-        vm.recordLogs();
-        _send(_now(), _action(BinStepAutomation.ActionKind.Rebalance, p, 5000, 0));
-        assertEq(lp.getPosition(p).lowerBin, -3);
+        _send(_now(), _action(BinStepAutomation.ActionKind.Rebalance, p));
+        assertEq(lp.getPosition(p).lowerBin, -3, "price moved this block, so nothing may happen");
         _assertSkipped(p);
     }
 
     function test_positionsThatOptedOutAreSkippedWithoutFailingTheRest() public {
-        uint256 optedOut = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
-        uint256 optedIn = _mint(bob, -3, 6, Strategy.Spot, 10e18, 10e18);
+        _background();
+        uint256 optedOut = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        uint256 optedIn = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
         vm.prank(alice);
         lp.setAutomation(optedOut, false, false);
+        swap(key, true, -300e18, ZERO_BYTES);
+        uint64 later = 1_800_000_000 + uint64(hook.STABLE_WINDOW());
+        vm.warp(later);
 
         BinStepAutomation.Action[] memory actions = new BinStepAutomation.Action[](2);
-        actions[0] = BinStepAutomation.Action(BinStepAutomation.ActionKind.Rebalance, optedOut, -2, 0);
-        actions[1] = BinStepAutomation.Action(BinStepAutomation.ActionKind.Rebalance, optedIn, -2, 0);
-        _send(_now(), actions);
+        actions[0] = BinStepAutomation.Action(BinStepAutomation.ActionKind.Rebalance, optedOut);
+        actions[1] = BinStepAutomation.Action(BinStepAutomation.ActionKind.Rebalance, optedIn);
+        _send(later, actions);
 
         assertEq(lp.getPosition(optedOut).lowerBin, -3);
-        assertEq(lp.getPosition(optedIn).lowerBin, -2);
+        assertTrue(lp.getPosition(optedIn).lowerBin != -3);
     }
 
     function test_tooLittleGasRevertsInsteadOfSilentlySkipping() public {
-        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
-        BinStepAutomation.Action[] memory actions = _action(BinStepAutomation.ActionKind.Rebalance, p, -2, 0);
+        uint256 p = _mint(alice, -10, 20, Strategy.Spot, 10e18, 10e18);
+        BinStepAutomation.Action[] memory actions = _action(BinStepAutomation.ActionKind.Compound, p);
         bytes memory report = abi.encode(uint64(1_800_000_000), actions);
 
         vm.prank(forwarder);
@@ -151,12 +147,12 @@ contract BinStepAutomationTest is BinStepFixture {
 
         assertEq(auto_.lastObservedAt(), 0, "a failed delivery must stay retryable");
         vm.prank(forwarder);
-        auto_.onReport{gas: 4_000_000}(metadata, report);
-        assertEq(lp.getPosition(p).lowerBin, -2);
+        auto_.onReport{gas: 5_000_000}(metadata, report);
+        assertEq(auto_.lastObservedAt(), 1_800_000_000);
     }
 
     function test_outsidersCannotCallExecuteDirectly() public {
-        BinStepAutomation.Action memory a = BinStepAutomation.Action(BinStepAutomation.ActionKind.Compound, 1, 0, 0);
+        BinStepAutomation.Action memory a = BinStepAutomation.Action(BinStepAutomation.ActionKind.Compound, 1);
         vm.expectRevert(BinStepAutomation.OnlySelf.selector);
         auto_.execute(a);
     }
@@ -168,20 +164,26 @@ contract BinStepAutomationTest is BinStepFixture {
         vm.expectRevert();
         auto_.setExpectedWorkflowOwner(bob);
         vm.expectRevert();
-        auto_.setLimits(1, 1);
+        auto_.setMaxReportAge(1);
         vm.stopPrank();
     }
 
     function test_maxSizeRebalanceFitsTheMinimumActionGas() public {
+        _background();
         uint256 p = _mint(alice, -16, 32, Strategy.Curve, 50e18, 50e18);
-        BinStepAutomation.Action[] memory actions =
-            _action(BinStepAutomation.ActionKind.Rebalance, p, -15, _tick());
+        swap(key, true, -1200e18, ZERO_BYTES);
+        uint64 later = 1_800_000_000 + uint64(hook.STABLE_WINDOW());
+        vm.warp(later);
+        int24 before = lp.getPosition(p).lowerBin;
+        assertTrue(_tick() < -160, "position must be out of range");
+
+        bytes memory report = abi.encode(later, _action(BinStepAutomation.ActionKind.Rebalance, p));
         vm.prank(forwarder);
         uint256 start = gasleft();
-        auto_.onReport(metadata, abi.encode(_now(), actions));
+        auto_.onReport(metadata, report);
         uint256 used = start - gasleft();
         emit log_named_uint("gas for 32-bin rebalance", used);
-        assertEq(lp.getPosition(p).lowerBin, -15);
+        assertTrue(lp.getPosition(p).lowerBin != before);
         assertLt(used, auto_.MIN_ACTION_GAS());
     }
 

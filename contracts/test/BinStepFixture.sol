@@ -19,6 +19,8 @@ abstract contract BinStepFixture is Test, Deployers {
     using StateLibrary for IPoolManager;
 
     int24 constant SPACING = 10;
+    int24 constant MAX_DRIFT = 50;
+    uint32 constant COOLDOWN = 3600;
     int24 constant ANY_MIN = -887272;
     int24 constant ANY_MAX = 887272;
 
@@ -34,7 +36,7 @@ abstract contract BinStepFixture is Test, Deployers {
         deployFreshManagerAndRouters();
         deployMintAndApprove2Currencies();
 
-        lp = new BinStepManager(manager, address(this));
+        lp = new BinStepManager(manager, address(this), MAX_DRIFT, COOLDOWN);
         address hookAddress = address(
             uint160(
                 (uint160(0x4444) << 144) | Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG
@@ -96,6 +98,11 @@ abstract contract BinStepFixture is Test, Deployers {
         return manager.getPositionLiquidity(
             id, keccak256(abi.encodePacked(address(lp), lower, lower + SPACING, bytes32(positionId)))
         );
+    }
+
+    /// Deep liquidity from bob, so swaps move the price without emptying the pool.
+    function _background() internal returns (uint256) {
+        return _mint(bob, -32, 32, Strategy.Spot, 0, 900e18) + _mint(bob, 0, 32, Strategy.Spot, 900e18, 0);
     }
 
     function _balances(address who) internal view returns (uint256, uint256) {
