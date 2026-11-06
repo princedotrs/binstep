@@ -7,8 +7,10 @@ solc_version = "0.8.26"
 evm_version = "cancun"
 via_ir = true
 optimizer = true
-optimizer_runs = 800
+optimizer_runs = 44444444
 ffi = false
+gas_limit = "300000000"
+allow_internal_expect_revert = true
 bytecode_hash = "none"
 
 [rpc_endpoints]
