@@ -6,3 +6,5 @@ node_modules/
 .devnet/
 contracts/deployments/*.json
 !contracts/deployments/base-sepolia.json
+!contracts/deployments/base-sepolia.markets.json
+contracts/*.env

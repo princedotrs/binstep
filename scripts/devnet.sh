@@ -27,7 +27,7 @@ json() { python3 -c "import json;print(json.load(open('$DEPLOYMENT'))['$1'])"; }
 send() { cast send -q --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" "$@"; }
 background() { # name, then the command; it outlives this script
   local name=$1; shift
-  setsid nohup "$@" >"$RUN/$name.log" 2>&1 </dev/null &
+  perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die $!' nohup "$@" >"$RUN/$name.log" 2>&1 </dev/null &
   echo $! >"$RUN/$name.pid"
 }
 running() { [ -f "$RUN/$1.pid" ] && kill -0 "$(cat "$RUN/$1.pid")" 2>/dev/null; }
@@ -42,28 +42,28 @@ wait_for() { # description, then a test command
 }
 
 write_cre_config() {
-  local weth_first dec0 dec1
-  weth_first=$(json wethIsToken0 | tr '[:upper:]' '[:lower:]')
-  if [ "$weth_first" = true ]; then dec0=18; dec1=6; else dec0=6; dec1=18; fi
-  cat >"$ROOT/cre/automation/config.local-fork.json" <<CONFIG
-{
-  "schedule": "*/30 * * * * *",
-  "chainSelectorName": "ethereum-testnet-sepolia-base-1",
-  "managerAddress": "$(json manager)",
-  "automationAddress": "$(json automation)",
-  "priceApiUrl": "$PRICE_API",
-  "firstPositionId": 1,
-  "pageSize": 50,
-  "gasLimit": "9500000",
-  "wethIsToken0": $weth_first,
-  "token0Decimals": $dec0,
-  "token1Decimals": $dec1,
-  "maxPriceDeviationBps": 300,
-  "minCompoundUsd": 1,
-  "minDistanceBins": 2,
-  "maxTickDrift": 50,
-  "maxActions": 2
-}
+  python3 - "$DEPLOYMENT" "$PRICE_API" "$ROOT/cre/automation/config.local-fork.json" <<'CONFIG'
+import json, sys
+path, price_api, out = sys.argv[1:]
+data = json.load(open(path))
+seeded = [{"poolId": data["poolId"], "baseIsToken0": data["wethIsToken0"], "baseDecimals": 18, "priceApiUrl": price_api}]
+listed = [{"poolId": m["poolId"], "baseIsToken0": m["baseIsToken0"], "baseDecimals": m["decimals"]} for m in data["markets"]]
+json.dump({
+    "schedule": "*/30 * * * * *",
+    "chainSelectorName": "ethereum-testnet-sepolia-base-1",
+    "managerAddress": data["manager"],
+    "automationAddress": data["automation"],
+    "registryAddress": data["registry"],
+    "markets": seeded + listed,
+    "firstPositionId": 1,
+    "pageSize": 25,
+    "gasLimit": "9500000",
+    "maxPriceDeviationBps": 300,
+    "minCompoundUsd": 1,
+    "minDistanceBins": 2,
+    "maxTickDrift": 50,
+    "maxActions": 2,
+}, open(out, "w"), indent=2)
 CONFIG
 }
 
@@ -95,10 +95,16 @@ up() {
   echo "Deploying contracts and seeding the pool at \$$eth_usd"
   (cd "$ROOT/contracts" && DEPLOYMENT_FILE=./deployments/devnet.json DEPLOYER_KEY=$DEPLOYER_KEY ETH_PRICE_USD=$eth_usd \
     forge script script/DeployBaseSepolia.s.sol:DeployBaseSepolia --rpc-url "$RPC" --broadcast --skip-simulation -q >/dev/null)
+  echo "Adding the test markets"
+  (cd "$ROOT/contracts" && DEPLOYMENT_FILE=./deployments/devnet.json MARKETS_FILE=./deployments/devnet.markets.json DEPLOYER_KEY=$DEPLOYER_KEY \
+    forge script script/DeployMarkets.s.sol:DeployMarkets --rpc-url "$RPC" --broadcast --skip-simulation -q >/dev/null)
+  (cd "$ROOT/contracts" && DEPLOYMENT_FILE=./deployments/devnet.json DEPLOYER_KEY=$DEPLOYER_KEY \
+    forge script script/DeployRegistry.s.sol:DeployRegistry --rpc-url "$RPC" --broadcast --skip-simulation -q >/dev/null)
   python3 -c "
 import json
 data = json.load(open('$DEPLOYMENT'))
 data['deployBlock'] = $start
+data['markets'] = json.load(open('$ROOT/contracts/deployments/devnet.markets.json'))
 json.dump(data, open('$DEPLOYMENT', 'w'))"
   write_cre_config
 
