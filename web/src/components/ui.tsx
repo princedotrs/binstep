@@ -25,9 +25,11 @@ export function AmountField(props: {
   value: string;
   token?: string;
   dot?: string;
-  onChange: (value: string) => void;
+  /** Without it the field is read-only. */
+  onChange?: (value: string) => void;
   balance?: string;
   onMax?: () => void;
+  onHalf?: () => void;
   disabled?: boolean;
   note?: string;
 }) {
@@ -36,11 +38,21 @@ export function AmountField(props: {
     <div className={`rounded-lg border border-line bg-ink px-3 py-2 focus-within:border-accent ${props.disabled ? "opacity-50" : ""}`}>
       <div className="mb-0.5 flex items-center justify-between text-xs text-muted">
         <label htmlFor={id}>{props.label}</label>
-        {props.balance !== undefined && (
-          <button type="button" className="font-mono hover:text-text" disabled={props.disabled} onClick={props.onMax}>
-            Max {props.balance}
-          </button>
-        )}
+        <span className="flex items-center gap-2 font-mono">
+          {props.balance !== undefined && props.onHalf && (
+            <button type="button" className="hover:text-text" disabled={props.disabled} onClick={props.onHalf}>
+              50%
+            </button>
+          )}
+          {props.balance !== undefined &&
+            (props.onMax ? (
+              <button type="button" className="hover:text-text" disabled={props.disabled} onClick={props.onMax}>
+                Max {props.balance}
+              </button>
+            ) : (
+              <span>Balance {props.balance}</span>
+            ))}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <input
@@ -49,7 +61,8 @@ export function AmountField(props: {
           placeholder={props.note ?? "0.0"}
           value={props.disabled ? "" : props.value}
           disabled={props.disabled}
-          onChange={(e) => props.onChange(e.target.value)}
+          readOnly={!props.onChange}
+          onChange={(e) => props.onChange?.(e.target.value)}
           className={`w-full min-w-0 flex-1 bg-transparent font-mono outline-none ${props.note ? "text-sm" : "text-lg"}`}
         />
         {props.token && (
@@ -104,6 +117,13 @@ export function PairIcon() {
     </span>
   );
 }
+
+export const FlipIcon = ({ size = 17 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M7 4v16M7 4 3 8M7 4l4 4" />
+    <path d="M17 20V4M17 20l4-4M17 20l-4-4" />
+  </svg>
+);
 
 export const LoopIcon = ({ size = 19 }: { size?: number }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

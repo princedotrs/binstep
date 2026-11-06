@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { DepositPanel, type Draft } from "@/components/DepositPanel";
 import { Loading } from "@/components/Loading";
 import { ManualRange } from "@/components/ManualRange";
 import { RangeChart } from "@/components/RangeChart";
-import { SwapPanel } from "@/components/SwapPanel";
 import { PairIcon, Panel, Stat } from "@/components/ui";
 import { feePercent, percent, price, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
@@ -19,7 +18,6 @@ const trim = (value: number, decimals: number) => (value > 0 ? String(Number(val
 
 function Workspace({ pool }: { pool: PoolState }) {
   const { data: stats } = useStats(pool);
-  const [tab, setTab] = useState<"deposit" | "swap">("deposit");
   const [strategy, setStrategy] = useState<Strategy>(1);
   const [range, setRange] = useState<Range>({ lo: -8, hi: 7 });
   const [scrub, setScrub] = useState(0);
@@ -27,10 +25,6 @@ function Workspace({ pool }: { pool: PoolState }) {
   const [anchor, setAnchor] = useState<{ side: "weth" | "usdc"; text: string }>({ side: "weth", text: "" });
   const [autoCompound, setAutoCompound] = useState(true);
   const [autoRebalance, setAutoRebalance] = useState(true);
-
-  useEffect(() => {
-    if (new URLSearchParams(location.search).get("tab") === "swap") setTab("swap");
-  }, []);
 
   const { activeBin, tick, wethIsToken0: flip } = pool;
   const numBins = range.hi - range.lo + 1;
@@ -88,14 +82,6 @@ function Workspace({ pool }: { pool: PoolState }) {
     onAutoRebalance: setAutoRebalance,
   };
 
-  const tabButton = (id: typeof tab, label: string) => (
-    <button
-      className={`-mb-px border-b-2 pb-2.5 font-medium ${tab === id ? "border-accent text-text" : "border-transparent text-muted"}`}
-      onClick={() => setTab(id)}
-    >
-      {label}
-    </button>
-  );
   const mode = (on: boolean, label: string, value: boolean) => (
     <button
       type="button"
@@ -156,11 +142,11 @@ function Workspace({ pool }: { pool: PoolState }) {
         </Panel>
 
         <Panel>
-          <div className="-mt-1 mb-3.5 flex gap-4.5 border-b border-line">
-            {tabButton("deposit", "Deposit")}
-            {tabButton("swap", "Swap")}
+          <div className="-mt-1 mb-3.5 flex items-center justify-between border-b border-line pb-2.5">
+            <h2 className="font-medium">Deposit</h2>
+            <Link href="/swap" className="text-sm text-muted hover:text-text">Swap →</Link>
           </div>
-          {tab === "deposit" ? <DepositPanel pool={pool} stats={stats} draft={draft} /> : <SwapPanel pool={pool} />}
+          <DepositPanel pool={pool} stats={stats} draft={draft} />
         </Panel>
       </div>
     </div>

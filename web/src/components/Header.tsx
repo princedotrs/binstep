@@ -126,6 +126,7 @@ export function Header() {
           </Link>
           <nav className="flex items-center gap-4">
             {link("/", "Markets", path === "/" || path === "/pool")}
+            {link("/swap", "Swap")}
             {link("/positions", "Positions")}
           </nav>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">

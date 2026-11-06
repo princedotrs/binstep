@@ -50,7 +50,7 @@ input[inputmode="decimal"]:focus-visible {
   outline: none;
 }
 
-.brand {
+.brand:not(:disabled) {
   background: linear-gradient(100deg, var(--color-accent), var(--color-accent2));
   color: var(--color-on-accent);
 }

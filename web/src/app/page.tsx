@@ -2,36 +2,16 @@
 
 import Link from "next/link";
 import { HeroWave } from "@/components/HeroWave";
+import { LiquidityShape } from "@/components/LiquidityShape";
 import { AimIcon, LoopIcon, PairIcon } from "@/components/ui";
 import { percent, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
 import { MARKETS } from "@/lib/markets";
-import type { PoolState } from "@/lib/read";
 
 const HEAD = "px-4 py-3 text-right text-xs font-medium text-muted";
 const CELL = "px-4 py-3.5 text-right font-mono text-sm";
 const WIDE = "hidden md:table-cell";
 const MID = "hidden sm:table-cell";
-const SHAPE_REACH = 15;
-
-function LiquidityShape({ pool }: { pool: PoolState }) {
-  const heights = Array.from({ length: SHAPE_REACH * 2 + 1 }, (_, i) => {
-    const bin = pool.activeBin - SHAPE_REACH + i;
-    return { i, bin, liquidity: pool.bins.find((b) => b.bin === bin)?.liquidity ?? 0n };
-  });
-  const peak = heights.reduce((max, b) => (b.liquidity > max ? b.liquidity : max), 1n);
-  return (
-    <span className="inline-flex h-6.5 w-22 items-end gap-px" aria-hidden>
-      {heights.map(({ i, bin, liquidity }) => (
-        <i
-          key={i}
-          className={`min-h-px flex-1 ${bin === pool.activeBin ? "bg-now" : bin > pool.activeBin === pool.wethIsToken0 ? "bg-weth" : "bg-usdc"}`}
-          style={{ height: `${Number((liquidity * 100n) / peak)}%` }}
-        />
-      ))}
-    </span>
-  );
-}
 
 export default function MarketsPage() {
   const { data: pool, isError } = usePool();
@@ -107,7 +87,7 @@ export default function MarketsPage() {
                 <td className={`${CELL} text-good`}>{stats ? percent(stats.apr) : waitStats}</td>
                 <td className={`${CELL} ${MID}`}>
                   <span className="relative z-10 inline-flex gap-1.5 font-sans">
-                    <Link href={`${market.href}?tab=swap`} className="rounded-lg border border-line bg-raised px-3 py-2 text-sm hover:border-muted">
+                    <Link href={market.swapHref} className="rounded-lg border border-line bg-raised px-3 py-2 text-sm hover:border-muted">
                       Swap
                     </Link>
                     <Link href={market.href} className="brand rounded-lg px-3.5 py-2 text-sm font-semibold hover:brightness-110">
