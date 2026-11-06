@@ -11,6 +11,7 @@ optimizer_runs = 44444444
 ffi = false
 gas_limit = "300000000"
 allow_internal_expect_revert = true
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
 bytecode_hash = "none"
 
 [rpc_endpoints]

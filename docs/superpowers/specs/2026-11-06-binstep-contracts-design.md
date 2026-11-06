@@ -48,4 +48,7 @@ A report is not trusted for policy. Onchain checks enforce:
 ## Limits
 - At most 32 bins per position.
 - Base fee 0.05%, plus 0.01% per bin of recent movement, capped at 1%.
-- Volatility halves every 60 seconds.
+- Volatility counts bin boundaries crossed and halves every 60 seconds.
+- `onReport` needs 3M gas available per action, and reverts below that so a
+  report is never consumed by a silent out-of-gas skip. A 32-bin rebalance
+  measures about 2.13M gas.
