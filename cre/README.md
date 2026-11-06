@@ -46,3 +46,6 @@ arbitrage. Stay within 3% of the live price, or the workflow refuses to act.
 
 First real run: compounded positions 1 and 2 in
 [`0xa7b3ebc3...1188e1df`](https://sepolia.basescan.org/tx/0xa7b3ebc3baa7004203bca4db6bf2edf2d1b2a6a93ad772e175ed5acb1188e1df).
+
+First live rebalance: moved positions 1 and 2 after the price left their range in
+[`0x911247f0...1607366a`](https://sepolia.basescan.org/tx/0x911247f02224e0d093b87a15d33ae3334689f303f93bc2980b3e35a61607366a).
