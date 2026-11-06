@@ -2,10 +2,10 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import type { TransactionReceipt } from "viem";
+import { erc20Abi, type Address, type TransactionReceipt } from "viem";
 import { useAccount, useConfig, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
-import { CHAIN_ID, DEVNET } from "./addresses";
+import { CHAIN_ID, DEVNET, addresses } from "./addresses";
 import type { Market } from "./markets";
 import { poolLiquidity } from "./math";
 import { showNotice } from "./notice";
@@ -55,6 +55,23 @@ export function usePool(market: Market) {
     [pool, wallet.data, address],
   );
   return { data, isError: pools.isError };
+}
+
+/** Names the wallet, so it uses the anon route like every other wallet read. */
+export function useWalletBalances(address: Address, enabled: boolean) {
+  return useQuery({
+    queryKey: ["pool", "balances", address],
+    queryFn: async () => {
+      const [eth, usdc] = await Promise.all([
+        readClient.getBalance({ address }),
+        readClient.readContract({ address: addresses.usdc, abi: erc20Abi, functionName: "balanceOf", args: [address] }),
+      ]);
+      return { eth, usdc };
+    },
+    enabled,
+    refetchInterval: POLL_MS,
+    retry: false,
+  });
 }
 
 export function liquidityUsd(pool: PoolState) {

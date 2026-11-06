@@ -13,7 +13,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { RPC_URL, addresses } from "@/lib/addresses";
-import { AIRDROP_USDC, airdropBase, decideAirdrop, type AirdropKind } from "@/lib/airdrop";
+import { AIRDROP_USDC, airdropBase, decideAirdrop, takeGasDrip, type AirdropKind, type GasDrips } from "@/lib/airdrop";
 import { findMarket, type Market } from "@/lib/markets";
 import { readMarkets } from "@/lib/read";
 
@@ -29,6 +29,7 @@ const multicallAbi = parseAbi([
 const mintAbi = parseAbi(["function mint(address to, uint256 value)"]);
 
 const lastSent = new Map<string, number>();
+const gasDrips: GasDrips = new Map();
 let queue: Promise<unknown> = Promise.resolve();
 
 const reply = (status: number, body: object) => Response.json(body, { status });
@@ -99,16 +100,22 @@ export async function POST(request: Request) {
   const waited = Date.now() - (lastSent.get(id) ?? 0);
   if (waited < COOLDOWN_MS) return reply(429, { error: "Try again in a few seconds" });
 
+  // Taken before the first await, so two requests at once cannot both pass.
+  lastSent.set(id, Date.now());
   try {
     const decision = decideAirdrop(kind, await readWallet(market, to), market ? airdropBase(market) : 0n);
-    if (!decision.send) return reply(200, { sent: false, reason: decision.reason });
-    lastSent.set(id, Date.now());
+    if (!decision.send) {
+      lastSent.delete(id);
+      return reply(200, { sent: false, reason: decision.reason });
+    }
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+    const gas = decision.gas > 0n && takeGasDrip(gasDrips, ip, Date.now()) ? decision.gas : 0n;
 
     // One signer, so sends run in order to keep its nonces valid.
-    const job = queue.then(() => send(key, market, to, decision.gas));
+    const job = queue.then(() => send(key, market, to, gas));
     queue = job.catch(() => {});
     const hash = await job;
-    return reply(200, { sent: true, hash, gas: decision.gas.toString() });
+    return reply(200, { sent: true, hash, gas: gas.toString() });
   } catch {
     lastSent.delete(id);
     return reply(502, { error: "Airdrop failed. Try again." });
