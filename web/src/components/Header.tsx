@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { CHAIN_ID } from "@/lib/addresses";
 import { shortAddress } from "@/lib/format";
+import { AirdropButton } from "./Airdrop";
 import { PrivacyBadge, PrivacyBanner } from "./Privacy";
 
 function WalletButton() {
@@ -64,8 +65,9 @@ export function Header() {
             {link("/", "Pool")}
             {link("/positions", "Positions")}
           </nav>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <PrivacyBadge />
+            <AirdropButton />
             <WalletButton />
           </div>
         </div>

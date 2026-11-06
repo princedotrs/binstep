@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/lib/math.test.ts src/lib/anon.test.ts src/lib/validate.test.ts",
+    "test": "bun test src/lib/math.test.ts src/lib/anon.test.ts src/lib/validate.test.ts src/lib/airdrop.test.ts",
     "test:live": "bun test src/lib/read.live.test.ts src/lib/tx.live.test.ts",
     "sync-abi": "python3 scripts/sync-abi.py"
   },

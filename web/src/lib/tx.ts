@@ -1,24 +1,12 @@
-import { erc20Abi, maxUint256, parseAbi, parseUnits, type Address } from "viem";
+import { erc20Abi, maxUint256, type Address } from "viem";
 import { managerAbi, swapRouterAbi } from "./abi";
 import { TICK_GUARD, WETH_IS_TOKEN0, addresses, poolKey } from "./addresses";
 import type { Strategy } from "./math";
-
-const mintableAbi = parseAbi(["function mint(address to, uint256 value)"]);
 
 /** Stops a swap about 3% from the price, so one trade cannot empty the test pool. */
 export const SWAP_LIMIT_TICKS = 300;
 
 const sqrtPriceAtTick = (tick: number) => BigInt(Math.floor(1.0001 ** (tick / 2) * 2 ** 96));
-
-export const FAUCET_WETH = parseUnits("10", 18);
-export const FAUCET_USDC = parseUnits("25000", 6);
-
-export function faucetCalls(to: Address) {
-  return [
-    { address: addresses.weth, abi: mintableAbi, functionName: "mint", args: [to, FAUCET_WETH] },
-    { address: addresses.usdc, abi: mintableAbi, functionName: "mint", args: [to, FAUCET_USDC] },
-  ] as const;
-}
 
 export function approveCall(token: Address, spender: Address) {
   return { address: token, abi: erc20Abi, functionName: "approve", args: [spender, maxUint256] } as const;

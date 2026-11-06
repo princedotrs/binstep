@@ -12,7 +12,7 @@ through Anon-RPC by default, so viewing a position does not tie an IP to a walle
 - Out-of-range positions explain themselves, including limit-order style re-entry.
 
 ## Non-goals
-Indexer, backend, Railway, price history charts, multiple pools, mainnet, a
+Indexer, a separate backend, Railway, price history charts, multiple pools, mainnet, a
 Uniswap app integration, native ETH.
 
 ## Anti-goals
@@ -34,9 +34,19 @@ My calls:
 - A swap uses the deployed `PoolSwapTest` router, and a position uses `BinStepManager`.
 - A mint or manage call takes a tick guard of +/-100 ticks around the price read.
 
+## Airdrop
+From the user: tokens arrive on first connect, and a button sends more.
+My calls:
+- `/api/airdrop` pays, since new wallets have no gas. It is the app's only server code.
+- It signs with a dedicated wallet with no contract rights.
+- Each drop is one atomic Multicall3 transaction with 0.0003 test ETH when the wallet is low.
+- First connect is tracked per wallet in browser storage, and the server also refuses
+  "first" for a wallet holding test tokens. Top-ups stop at ten airdrops of both tokens.
+
 ## Exclusions from Anon-RPC, stated in the UI and submission
 - Wallet transactions, their receipts and wallet-side reads use the wallet's own RPC.
 - One bootstrap read of the worker's specifier contract uses a public RPC.
+- An airdrop sends the wallet address to the app's server.
 
 ## Screens
 Pool: price, market fee, bin chart with the active bin marked, swap panel, faucet

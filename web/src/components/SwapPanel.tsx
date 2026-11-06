@@ -6,7 +6,7 @@ import { USDC_DECIMALS, WETH_DECIMALS, addresses } from "@/lib/addresses";
 import { token } from "@/lib/format";
 import { useTransactions } from "@/lib/hooks";
 import type { PoolState } from "@/lib/read";
-import { FAUCET_USDC, FAUCET_WETH, approveCall, faucetCalls, swapCall } from "@/lib/tx";
+import { approveCall, swapCall } from "@/lib/tx";
 import { parseAmount, swapBlocker } from "@/lib/validate";
 import { formatUnits } from "viem";
 import { AmountField, Panel, Primary } from "./ui";
@@ -74,19 +74,6 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
       </Primary>
       {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
 
-      <div className="mt-4 border-t border-line pt-3">
-        <p className="mb-2 text-xs text-muted">
-          Need test tokens? This mints {token(FAUCET_WETH, WETH_DECIMALS)} tWETH and {token(FAUCET_USDC, USDC_DECIMALS)}{" "}
-          tUSDC. You pay Base Sepolia gas.
-        </p>
-        <button
-          className="w-full rounded-md border border-line px-3 py-2 text-sm hover:border-muted disabled:text-muted"
-          disabled={!address || !!busy}
-          onClick={() => address && run("Minting", faucetCalls(address))}
-        >
-          Get test tokens
-        </button>
-      </div>
     </Panel>
   );
 }

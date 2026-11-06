@@ -6,7 +6,7 @@ Bid-Ask positions, and manage them.
 ```bash
 npm install
 npm run dev
-npm test              # math, Anon-RPC route, form validation
+npm test              # math, Anon-RPC route, form validation, airdrop rules
 npm run test:live     # reads and simulates against Base Sepolia
 ```
 
@@ -25,7 +25,17 @@ Not covered by Anon-RPC:
 
 - Transactions, and waiting for their receipts, use the wallet's RPC.
 - One read of each worker's specifier contract uses a public RPC at startup.
+- The airdrop sends the wallet address to this app's server.
+
+## Airdrop
+
+A new wallet gets 10 tWETH, 25,000 tUSDC and 0.0003 test ETH when it first connects.
+The header button sends more, until a wallet holds ten airdrops of both tokens.
+
+`/api/airdrop` signs with `AIRDROP_PRIVATE_KEY`, in `.env.local`. Use a dedicated
+wallet holding only test ETH. It needs no rights on any contract, because the test
+tokens can be minted by anyone. See `.env.example`.
 
 ## Deploying to Vercel
 
-Set the project's root directory to `web`. No environment variables are needed.
+Set the project's root directory to `web`, and set `AIRDROP_PRIVATE_KEY`.
