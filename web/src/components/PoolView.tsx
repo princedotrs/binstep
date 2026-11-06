@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { DepositPanel, type Draft } from "@/components/DepositPanel";
-import { Loading } from "@/components/Loading";
-import { ManualRange } from "@/components/ManualRange";
-import { RangeChart } from "@/components/RangeChart";
-import { PairIcon, Panel, Stat } from "@/components/ui";
+import { DepositPanel, type Draft } from "./DepositPanel";
+import { Loading } from "./Loading";
+import { ManualRange } from "./ManualRange";
+import { RangeChart } from "./RangeChart";
+import { PairIcon, Panel, Stat } from "./ui";
 import { feePercent, percent, price, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
+import type { Market } from "@/lib/markets";
 import { depositSplit, estimateEarnings, type Strategy } from "@/lib/math";
 import { binAtOffset, lowerBinOf, type Range } from "@/lib/range";
 import type { PoolState } from "@/lib/read";
@@ -16,7 +17,7 @@ import { mintSides } from "@/lib/validate";
 
 const trim = (value: number, decimals: number) => (value > 0 ? String(Number(value.toFixed(decimals))) : "");
 
-function Workspace({ pool }: { pool: PoolState }) {
+function Workspace({ market, pool }: { market: Market; pool: PoolState }) {
   const { data: stats } = useStats(pool);
   const [strategy, setStrategy] = useState<Strategy>(1);
   const [range, setRange] = useState<Range>({ lo: -8, hi: 7 });
@@ -101,8 +102,8 @@ function Workspace({ pool }: { pool: PoolState }) {
           <div className="flex items-center gap-3">
             <PairIcon />
             <div>
-              <b className="block text-sm font-semibold">tWETH / tUSDC</b>
-              <small className="text-xs text-muted">Dynamic fee · 0.10% bins</small>
+              <b className="block text-sm font-semibold">{market.name}</b>
+              <small className="text-xs text-muted">Dynamic fee · {market.binWidth} bins</small>
             </div>
           </div>
           <Stat label="Price" value={price(pool.usd)} />
@@ -144,7 +145,7 @@ function Workspace({ pool }: { pool: PoolState }) {
         <Panel>
           <div className="-mt-1 mb-3.5 flex items-center justify-between border-b border-line pb-2.5">
             <h2 className="font-medium">Deposit</h2>
-            <Link href="/swap" className="text-sm text-muted hover:text-text">Swap →</Link>
+            <Link href={market.swapHref} className="text-sm text-muted hover:text-text">Swap →</Link>
           </div>
           <DepositPanel pool={pool} stats={stats} draft={draft} />
         </Panel>
@@ -153,8 +154,8 @@ function Workspace({ pool }: { pool: PoolState }) {
   );
 }
 
-export default function PoolPage() {
+export function PoolView({ market }: { market: Market }) {
   const { data: pool, isError } = usePool();
   if (!pool) return <Loading error={isError} />;
-  return <Workspace pool={pool} />;
+  return <Workspace market={market} pool={pool} />;
 }

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain, type Connector } from "wagmi";
 import { CHAIN_ID, DEVNET } from "@/lib/addresses";
 import { shortAddress } from "@/lib/format";
+import { DEFAULT_MARKET } from "@/lib/markets";
 import { AirdropButton } from "./Airdrop";
 import { PrivacyBadge, PrivacyBanner } from "./Privacy";
 
@@ -125,8 +126,8 @@ export function Header() {
             bin<span className="brand-text">step</span>
           </Link>
           <nav className="flex items-center gap-4">
-            {link("/", "Markets", path === "/" || path === "/pool")}
-            {link("/swap", "Swap")}
+            {link("/", "Markets", path === "/" || path.startsWith("/pool"))}
+            {link(DEFAULT_MARKET.swapHref, "Swap", path.startsWith("/swap"))}
             {link("/positions", "Positions")}
           </nav>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">

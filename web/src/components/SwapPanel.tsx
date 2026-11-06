@@ -44,7 +44,7 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
   const flip = () => {
     setSell(buy);
     setAmount(receive);
-    history.replaceState(null, "", `/swap?from=${to.name}`);
+    history.replaceState(null, "", `?from=${to.name}`);
   };
 
   const submit = () => {

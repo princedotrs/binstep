@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { LiquidityShape } from "@/components/LiquidityShape";
-import { Loading } from "@/components/Loading";
-import { SwapPanel } from "@/components/SwapPanel";
-import { PairIcon, Panel, Stat } from "@/components/ui";
+import { LiquidityShape } from "./LiquidityShape";
+import { Loading } from "./Loading";
+import { SwapPanel } from "./SwapPanel";
+import { PairIcon, Panel, Stat } from "./ui";
 import { feePercent, price, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
+import type { Market } from "@/lib/markets";
 import type { PoolState } from "@/lib/read";
 
-function MarketPanel({ pool }: { pool: PoolState }) {
+function MarketPanel({ market, pool }: { market: Market; pool: PoolState }) {
   const { data: stats } = useStats(pool);
   const legend = (dot: string, label: string) => (
     <span className="flex items-center gap-1.5">
@@ -23,11 +24,11 @@ function MarketPanel({ pool }: { pool: PoolState }) {
         <div className="flex items-center gap-3">
           <PairIcon />
           <div>
-            <b className="block text-sm font-semibold">tWETH / tUSDC</b>
-            <small className="text-xs text-muted">Dynamic fee · 0.10% bins</small>
+            <b className="block text-sm font-semibold">{market.name}</b>
+            <small className="text-xs text-muted">Dynamic fee · {market.binWidth} bins</small>
           </div>
         </div>
-        <Link href="/pool" className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted">
+        <Link href={market.href} className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted">
           View pool
         </Link>
       </div>
@@ -52,18 +53,21 @@ function MarketPanel({ pool }: { pool: PoolState }) {
   );
 }
 
-export default function SwapPage() {
+export function SwapView({ market }: { market: Market }) {
   const { data: pool, isError } = usePool();
   if (!pool) return <Loading error={isError} />;
   return (
-    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_26rem]">
-      <div className="lg:order-last">
-        <Panel>
-          <h1 className="mb-3 text-sm font-semibold">Swap</h1>
-          <SwapPanel pool={pool} />
-        </Panel>
+    <div className="space-y-3.5">
+      <Link href="/" className="inline-block text-sm text-muted hover:text-text">← All markets</Link>
+      <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="lg:order-last">
+          <Panel>
+            <h1 className="mb-3 text-sm font-semibold">Swap</h1>
+            <SwapPanel pool={pool} />
+          </Panel>
+        </div>
+        <MarketPanel market={market} pool={pool} />
       </div>
-      <MarketPanel pool={pool} />
     </div>
   );
 }

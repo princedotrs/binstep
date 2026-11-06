@@ -3,7 +3,8 @@
 The app for the live Base Sepolia pool: browse markets, see the bins, swap, create
 Spot, Curve or Bid-Ask positions, and manage them.
 
-The homepage lists the markets in `src/lib/markets.ts`. Only tWETH / tUSDC is deployed.
+The homepage lists the markets in `src/lib/markets.ts`. Each has a `/pool/<id>` and a
+`/swap/<id>` page. Only tWETH / tUSDC is deployed, and `usePool` reads that one pool.
 Volume, fees and APR come from the last 43,200 blocks of swap logs. `/api/stats` scans
 them on the server and caches the totals, because the public RPC only serves 200 blocks
 of logs per request. No wallet address is involved.

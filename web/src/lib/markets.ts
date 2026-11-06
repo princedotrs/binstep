@@ -6,5 +6,17 @@ export type Market = {
   binWidth: string;
 };
 
+const market = (id: string, name: string, binWidth: string): Market => ({
+  id,
+  name,
+  binWidth,
+  href: `/pool/${id}`,
+  swapHref: `/swap/${id}`,
+});
+
 /** Pools the app can trade. Each one's live data comes from `usePool`. */
-export const MARKETS: Market[] = [{ id: "tweth-tusdc", name: "tWETH / tUSDC", href: "/pool", swapHref: "/swap", binWidth: "0.10%" }];
+export const MARKETS: Market[] = [market("tweth-tusdc", "tWETH / tUSDC", "0.10%")];
+
+export const DEFAULT_MARKET = MARKETS[0];
+
+export const findMarket = (id: string) => MARKETS.find((entry) => entry.id === id);

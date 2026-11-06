@@ -1,5 +1,15 @@
 import type { NextConfig } from "next";
+import { DEFAULT_MARKET } from "./src/lib/markets";
 
-const config: NextConfig = { reactStrictMode: true, distDir: process.env.NEXT_DIST_DIR ?? ".next" };
+const config: NextConfig = {
+  reactStrictMode: true,
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  async redirects() {
+    return [
+      { source: "/pool", destination: DEFAULT_MARKET.href, permanent: false },
+      { source: "/swap", destination: DEFAULT_MARKET.swapHref, permanent: false },
+    ];
+  },
+};
 
 export default config;
