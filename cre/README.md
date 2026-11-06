@@ -27,3 +27,22 @@ The script deploys a test WETH/USDC pool at the live ETH price, then runs the
 workflow through compounding, waiting, rebalancing and refusing a mispriced pool.
 `cre/.env` must hold Anvil's public test key for this. Never use a real key with
 the `local-fork` target.
+
+## Live on Base Sepolia
+
+Addresses are in `contracts/deployments/base-sepolia.json`. Keep the wallet key
+in `cre/base-sepolia.env`, which is gitignored, and pass it with `-e`.
+
+```bash
+cre workflow simulate automation --target base-sepolia -e base-sepolia.env \
+  --non-interactive --trigger-index 0            # dry run, sends nothing
+# add --broadcast to send the report through MockKeystoneForwarder
+
+./scripts/move-price.sh 2200                     # swap the test pool to a USD price
+```
+
+The test pool only moves when someone swaps, so `move-price.sh` stands in for
+arbitrage. Stay within 3% of the live price, or the workflow refuses to act.
+
+First real run: compounded positions 1 and 2 in
+[`0xa7b3ebc3...1188e1df`](https://sepolia.basescan.org/tx/0xa7b3ebc3baa7004203bca4db6bf2edf2d1b2a6a93ad772e175ed5acb1188e1df).

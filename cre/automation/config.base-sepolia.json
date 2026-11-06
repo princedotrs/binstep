@@ -1,0 +1,18 @@
+{
+  "schedule": "0 */5 * * * *",
+  "chainSelectorName": "ethereum-testnet-sepolia-base-1",
+  "managerAddress": "0xF5853e9da895496Da25975C94f02F0DfcBe18aeC",
+  "automationAddress": "0x7963d38592C079d5917433e84a57a4fF4f91AAE6",
+  "priceApiUrl": "https://api.coinbase.com/v2/prices/ETH-USD/spot",
+  "firstPositionId": 1,
+  "pageSize": 3,
+  "gasLimit": "9500000",
+  "wethIsToken0": true,
+  "token0Decimals": 18,
+  "token1Decimals": 6,
+  "maxPriceDeviationBps": 300,
+  "minCompoundUsd": 1,
+  "minDistanceBins": 2,
+  "maxTickDrift": 50,
+  "maxActions": 2
+}

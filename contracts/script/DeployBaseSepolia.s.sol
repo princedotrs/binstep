@@ -167,7 +167,7 @@ contract DeployBaseSepolia is Script {
         vm.serializeBool(json, "wethIsToken0", address(d.weth) < address(d.usdc));
         vm.serializeUint(json, "ethPriceUsd", ethPriceUsd);
         string memory out = vm.serializeBytes32(json, "poolId", PoolId.unwrap(d.key.toId()));
-        vm.writeJson(out, "./deployments/base-sepolia.json");
+        vm.writeJson(out, vm.envOr("DEPLOYMENT_FILE", string("./deployments/base-sepolia.json")));
         console2.log("hook", address(d.hook));
         console2.log("automation", address(d.automation));
     }

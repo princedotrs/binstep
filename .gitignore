@@ -4,3 +4,4 @@ contracts/broadcast/
 .env
 node_modules/
 contracts/deployments/*.json
+!contracts/deployments/base-sepolia.json

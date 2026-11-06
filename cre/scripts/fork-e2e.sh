@@ -19,10 +19,10 @@ MAX_LIMIT=1461446703485210103287273052203988822378723970341
 ETH_USD=$(curl -fsS "$PRICE_API" | python3 -c "import json,sys;print(int(float(json.load(sys.stdin)['data']['amount'])))")
 echo "Live ETH price: \$$ETH_USD"
 
-(cd "$CONTRACTS" && DEPLOYER_KEY=$KEY ETH_PRICE_USD=$ETH_USD forge script \
+(cd "$CONTRACTS" && DEPLOYMENT_FILE=./deployments/fork.json DEPLOYER_KEY=$KEY ETH_PRICE_USD=$ETH_USD forge script \
   script/DeployBaseSepolia.s.sol:DeployBaseSepolia --rpc-url "$RPC" --broadcast --skip-simulation -q >/dev/null)
 
-json() { python3 -c "import json;print(json.load(open('$CONTRACTS/deployments/base-sepolia.json'))['$1'])"; }
+json() { python3 -c "import json;print(json.load(open('$CONTRACTS/deployments/fork.json'))['$1'])"; }
 MANAGER=$(json manager); AUTOMATION=$(json automation); HOOK=$(json hook); ROUTER=$(json swapRouter)
 POOL=$(json poolId); WETH_IS_0=$(json wethIsToken0 | tr '[:upper:]' '[:lower:]')
 KEYT="($(json token0),$(json token1),8388608,10,$HOOK)"
