@@ -61,8 +61,13 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
         onMax={() => setAmount(formatUnits(balance, decimals))}
       />
       <p className="my-3 text-xs leading-relaxed text-muted">
-        About <span className="font-mono text-text">{estimate.toLocaleString("en-US", { maximumFractionDigits: 4 })}</span>{" "}
-        {sell === "weth" ? "tUSDC" : "tWETH"}. A swap stops 3% from the price, so a large one may fill in part.
+        {value > 0 && (
+          <>
+            About <span className="font-mono text-text">{estimate.toLocaleString("en-US", { maximumFractionDigits: 4 })}</span>{" "}
+            {sell === "weth" ? "tUSDC" : "tWETH"}.{" "}
+          </>
+        )}
+        A swap stops 3% from the price, so a large one may fill in part.
       </p>
       <Primary disabled={!!blocker || !!busy} onClick={submit}>
         {busy ?? blocker ?? "Swap"}

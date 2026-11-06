@@ -47,7 +47,7 @@ export function BinChart({ bins, activeBin, preview = [] }: Props) {
             <div className={`w-full rounded-t-[1px] ${c.color}`} style={{ height: `${Math.max(c.height * 100, c.height > 0 ? 1 : 0)}%` }} />
             {c.ghost !== undefined && (
               <div
-                className="absolute bottom-0 w-full border-x-0 border-t-2 border-text/80 bg-text/15"
+                className="absolute bottom-0 w-full border-t-2 border-text/90"
                 style={{ height: `${c.ghost * 100}%` }}
               />
             )}
