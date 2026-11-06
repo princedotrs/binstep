@@ -5,11 +5,14 @@ near the price.
 
 Each run it:
 
-1. Fetches the live ETH price from a public API.
-2. Reads every position in one call to `automationSnapshot`.
-3. Runs `automation/decide.ts`, which refuses to act if the pool is more than 3%
-   from the market, and otherwise picks the actions worth paying gas for.
-4. Sends a report naming those positions to `BinStepAutomation`.
+1. Fetches a live price for each market in the config that has a `priceApiUrl`.
+2. Reads the pools users created from `BinStepRegistry`.
+3. Reads every position through `automationSnapshot`, a page at a time.
+4. Runs `automation/decide.ts`, which picks the actions worth paying gas for. It
+   refuses to act on a pool more than 3% from its price feed. Only tWETH has a feed,
+   so other pools rely on the contracts' stable price check and cooldown.
+5. Sends a report naming those positions to `BinStepAutomation`. A report holds two
+   actions at most, across all pools.
 
 The report only says which positions to act on. The contracts work out the new
 range and enforce the stability checks and cooldown themselves.
