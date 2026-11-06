@@ -1,4 +1,6 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+"use client";
+
+import { useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
@@ -27,17 +29,19 @@ export function AmountField(props: {
   disabled?: boolean;
   note?: string;
 }) {
+  const id = useId();
   return (
-    <label className="block">
-      <span className="mb-1 flex items-center justify-between text-xs text-muted">
-        {props.label}
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs text-muted">
+        <label htmlFor={id}>{props.label}</label>
         {props.balance !== undefined && (
-          <button type="button" className="font-mono hover:text-text" onClick={props.onMax}>
+          <button type="button" className="font-mono hover:text-text" disabled={props.disabled} onClick={props.onMax}>
             Max {props.balance}
           </button>
         )}
-      </span>
+      </div>
       <input
+        id={id}
         inputMode="decimal"
         placeholder={props.note ?? "0.0"}
         value={props.disabled ? "" : props.value}
@@ -45,7 +49,7 @@ export function AmountField(props: {
         onChange={(e) => props.onChange(e.target.value)}
         className="w-full rounded-md border border-line bg-ink px-3 py-2 font-mono text-sm disabled:opacity-60"
       />
-    </label>
+    </div>
   );
 }
 
