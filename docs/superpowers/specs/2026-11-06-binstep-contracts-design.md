@@ -95,13 +95,22 @@ stable. Drift also acts as an onchain dwell: after a real move, a rebalance wait
 for the stable tick to catch up.
 
 ## CRE decision rules
-The workflow decides whether an allowed action is worth doing. It compares the
-pool with an external price and refuses to act when they disagree.
-- Compound: `deployable * feeRate * horizon >= gas * multiple`. Use what can
-  actually be deployed, not the fee balance.
-- Rebalance: require the condition to hold across a dwell window, a minimum
-  distance gain, and gas below a set fraction of position value.
-- Fee share: `ourL / (activeL + ourL)`, since we dilute ourselves.
+The contracts enforce safety. The workflow decides what is worth paying gas for.
+Each run reads the live ETH price from an API, then for each position:
+- Refuse if the pool is more than 3% from the market price.
+- Compound an in-range position when pending fees plus idle balances, valued at
+  the market price, reach `minCompoundUsd`.
+- Rebalance an out-of-range position when its cooldown has passed, the live tick
+  is within `maxTickDrift` of the stable tick, and it would move far enough.
+- Put rebalances first, then the largest compounds, and cap the batch at two
+  actions.
+
+The compound threshold is a flat USD amount for now. A horizon-based rule needs
+fee-rate history, which we do not index.
+
+The pool does not follow the market by itself. It starts at the live price and
+only trades move it, so the demo moves it with swaps, and a real deployment
+would rely on arbitrage. A pool more than 3% away is refused by design.
 
 ## Limits
 - At most 32 bins per position.
