@@ -11,3 +11,11 @@ export const serverClient = createPublicClient({
   chain: baseSepolia,
   transport: fallback(URLS.map((url) => http(url, { timeout: 8_000, retryCount: 1 }))),
 }) as unknown as PublicClient;
+
+/** Log scans use this RPC on Base Sepolia, because the default one serves only 200 blocks a call. */
+const LOG_URL = "https://base-sepolia-rpc.publicnode.com";
+export const LOG_RANGE = DEVNET ? 200n : 50_000n;
+
+export const logClient = DEVNET
+  ? serverClient
+  : (createPublicClient({ chain: baseSepolia, transport: http(LOG_URL, { timeout: 8_000, retryCount: 1 }) }) as unknown as PublicClient);

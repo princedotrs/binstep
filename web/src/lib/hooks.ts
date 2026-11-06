@@ -11,6 +11,7 @@ import { poolLiquidity } from "./math";
 import { showNotice } from "./notice";
 import { decodePools, readWallet, type PoolState, type Pools } from "./read";
 import { getStatus, readClient, subscribeStatus } from "./route";
+import type { AutomationCounts } from "./activity";
 import { aprOf, type MarketStats } from "./stats";
 
 const POLL_MS = DEVNET ? 3_000 : 15_000;
@@ -59,6 +60,20 @@ export function usePool(market: Market) {
 export function liquidityUsd(pool: PoolState) {
   const { base, usdc } = poolLiquidity(pool.bins, pool.tick, pool.market);
   return base * pool.usd + usdc;
+}
+
+/** How many times automation acted on each position. */
+export function useAutomationCounts() {
+  return useQuery<Record<string, AutomationCounts>>({
+    queryKey: ["automation"],
+    queryFn: async () => {
+      const res = await fetch("/api/automation");
+      if (!res.ok) throw new Error("Automation counts are unavailable");
+      return res.json();
+    },
+    refetchInterval: STATS_POLL_MS,
+    retry: 1,
+  });
 }
 
 export type MarketSummary = MarketStats & { apr: number };

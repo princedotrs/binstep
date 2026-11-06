@@ -173,6 +173,13 @@ describe("many pools", () => {
     expect(result.checks).toEqual([]);
   });
 
+  test("waits to compound while the price settles", () => {
+    const moving = position({ pending1: 5_000_000n, stableTick: TICK + 51 });
+    const result = decide([moving], at(3000), NOW, rules);
+    expect(result.actions).toEqual([]);
+    expect(result.skipped).toEqual([{ positionId: 1n, reason: "price still settling" }]);
+  });
+
   test("a pool with no feed still rebalances", () => {
     const lowerBin = Math.floor(otherTick / 10) + 20;
     const moved = elsewhere({ positionId: 2n, inRange: false, lowerBin, successorLowerBin: lowerBin - 30 });

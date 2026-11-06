@@ -11,8 +11,15 @@ markets in `contracts/script/DeployMarkets.s.sol`, which share the hook and mana
 `../scripts/deploy-registry.sh` deploys. These appear under Community as unverified, with the
 token address as the id.
 
-Every pool can use auto-compound and auto-rebalance. See `../cre/README.md` for what must be
-running for them to act.
+Every pool can use auto-compound and auto-rebalance. `scripts/keeper.ts` is the job that acts on
+them. Each run it reads every position, picks the actions worth paying gas for with
+`scripts/decide.ts`, and sends at most two to `BinStepAutomation`. It refuses to act on tWETH if the
+pool is more than 3% from the live ETH price. Other pools have no price feed, so they rely on the
+contracts' stable price check and cooldown, which apply to every action.
+
+The contracts accept reports only through their forwarder, so the keeper sends each one there. The
+forwarder on Base Sepolia is a mock that checks no signatures, so anyone can send a report. That is
+only safe here because a report just names positions that opted in. Replace it before using real funds.
 Volume, fees and APR come from the last 43,200 blocks of swap logs. `/api/stats` scans
 them on the server and caches the totals, because the public RPC only serves 200 blocks
 of logs per request. No wallet address is involved.
@@ -65,6 +72,17 @@ contracts, this app on port 3001, and the automation workflow every 30 seconds. 
 that script lists the commands that earn fees, move the price and fast-forward time.
 
 The mixnet cannot reach `localhost`, so devnet reads use the local RPC directly.
+
+## Demo bot
+
+`../scripts/demo-bot.sh start` trades on every pool and runs the keeper every 5 minutes, so
+positions earn fees, fall out of range and get compounded and rebalanced. It uses
+`contracts/deployer.env`, and stops itself when that wallet runs low on ETH. It stops when
+this machine sleeps. `../scripts/demo-bot.sh stop` ends it, and `logs` follows it.
+
+On Railway it runs from `railway.json` and `scripts/bot.Dockerfile`, so it does not depend on this
+machine. Set `DEPLOYER_KEY` on the Railway service. Run only one bot at a time, because both would
+send from the same wallet.
 
 ## Deploying to Vercel
 

@@ -79,9 +79,12 @@ function deviationBps(poolPrice: number, marketPrice: number): number {
 
 type Candidate = Action & { priority: number; valueUsd: number };
 
+/** The contracts refuse both actions while the price is moving, so sending one wastes gas. */
+const isSettling = (p: PositionView, rules: Rules) => Math.abs(p.liveTick - p.stableTick) > rules.maxTickDrift;
+
 function rebalanceSkipReason(p: PositionView, nowSeconds: number, rules: Rules): string | null {
   if (BigInt(nowSeconds) < p.nextRebalanceAt) return "cooldown";
-  if (Math.abs(p.liveTick - p.stableTick) > rules.maxTickDrift) return "price still settling";
+  if (isSettling(p, rules)) return "price still settling";
   if (Math.abs(p.successorLowerBin - p.lowerBin) < rules.minDistanceBins) return "too little distance gained";
   return null;
 }
@@ -137,6 +140,7 @@ export function decide(
     }
     const valueUsd = amountUsd(p.pending0 + p.idle0, p.pending1 + p.idle1, pool.marketUsd ?? livePrice, pool);
     if (valueUsd < rules.minCompoundUsd) skip("fees below threshold");
+    else if (isSettling(p, rules)) skip("price still settling");
     else candidates.push({ kind: ActionKind.Compound, positionId: p.positionId, priority: 0, valueUsd });
   }
 

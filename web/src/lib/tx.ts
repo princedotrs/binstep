@@ -7,7 +7,7 @@ import type { Strategy } from "./math";
 /** Stops a swap about 3% from the price, so one trade cannot empty the test pool. */
 export const SWAP_LIMIT_TICKS = 300;
 
-const sqrtPriceAtTick = (tick: number) => BigInt(Math.floor(1.0001 ** (tick / 2) * 2 ** 96));
+export const sqrtPriceAtTick = (tick: number) => BigInt(Math.floor(1.0001 ** (tick / 2) * 2 ** 96));
 
 export function createCall(registry: Address, name: string, symbol: string, priceE6: bigint) {
   return { address: registry, abi: registryAbi, functionName: "create", args: [name, symbol, priceE6] } as const;

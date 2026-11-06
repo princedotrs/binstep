@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { USDC_DECIMALS } from "@/lib/addresses";
 import { price, shortAddress, token } from "@/lib/format";
-import { useTransactions } from "@/lib/hooks";
+import { useAutomationCounts, useTransactions } from "@/lib/hooks";
 import { STRATEGY_NAMES, binToUsd, rangeState, type RangeState } from "@/lib/math";
 import type { PoolState, Position } from "@/lib/read";
 import { automationCall, closeCall, compoundCall, rebalanceCall } from "@/lib/tx";
@@ -38,8 +38,12 @@ function MiniBars({ position, activeBin }: { position: Position; activeBin: numb
   );
 }
 
+const timesLabel = (count: number) => `${count} ${count === 1 ? "time" : "times"}`;
+
 export function PositionCard({ position: p, pool, mine }: { position: Position; pool: PoolState; mine: boolean }) {
   const { run, busy, error } = useTransactions();
+  const { data: counts } = useAutomationCounts();
+  const done = counts?.[p.id.toString()] ?? { compounds: 0, rebalances: 0 };
   const state = STATE[rangeState(p)];
   const [low, high] = [p.lowerBin, p.lowerBin + p.numBins].map((b) => binToUsd(b, pool.market)).sort((a, b) => a - b);
   const { market } = pool;
@@ -81,6 +85,19 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
           </dd>
         </div>
       </dl>
+
+      {(p.autoCompound || p.autoRebalance || done.compounds > 0 || done.rebalances > 0) && (
+        <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3 text-sm">
+          <div>
+            <dt className="text-xs text-muted">Auto-compounded</dt>
+            <dd className="font-mono">{timesLabel(done.compounds)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">Auto-rebalanced</dt>
+            <dd className="font-mono">{timesLabel(done.rebalances)}</dd>
+          </div>
+        </dl>
+      )}
 
       {mine ? (
         <div className="mt-3 border-t border-line pt-3">
