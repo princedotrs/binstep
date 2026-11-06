@@ -2,7 +2,6 @@
 **/.next*
 **/.env*
 **/*.env
-**/.cre_build_tmp.*
 .git
 .devnet
 contracts

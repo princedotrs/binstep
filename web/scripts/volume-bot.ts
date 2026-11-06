@@ -1,11 +1,8 @@
 /**
- * Trades on every pool so positions earn fees and fall out of range, then runs the automation
- * workflow. One loop does both, so the two never send from the same wallet at once.
+ * Trades on every pool so positions earn fees and fall out of range, then runs the keeper.
+ * One loop does both, so the two never send from the same wallet at once.
  * Start it with scripts/demo-bot.sh. Test tokens only: anyone can mint them.
  */
-import { execFile } from "node:child_process";
-import { resolve } from "node:path";
-import { promisify } from "node:util";
 import {
   createPublicClient,
   createWalletClient,
@@ -27,10 +24,10 @@ import { poolKeyOf, type Market } from "../src/lib/markets";
 import { tickToUsd, usdToTick } from "../src/lib/math";
 import { readMarkets } from "../src/lib/read";
 import { sqrtPriceAtTick } from "../src/lib/tx";
+import { ethPriceUsd, runKeeper } from "./keeper";
 
 const VISIT_MS = 45_000;
 const AUTOMATION_MS = 300_000;
-const WORKFLOW_TIMEOUT_MS = 150_000;
 const MIN_ETH = parseEther("0.005");
 
 /** A Curve position spans 80 ticks each side, so a step puts it out of range. */
@@ -44,9 +41,6 @@ const LEVELS = [0, 1, 0, -1];
 const TOKEN_FLOAT = 10n ** 27n;
 /** The price limit ends each swap, so this only has to be more than it will spend. */
 const SWAP_AMOUNT = 10n ** 26n;
-
-const ETH_PRICE_URL = "https://api.coinbase.com/v2/prices/ETH-USD/spot";
-const CRE_DIR = resolve(import.meta.dirname, "../../cre");
 
 const key = process.env.DEPLOYER_KEY as Hex | undefined;
 if (!key) throw new Error("DEPLOYER_KEY is not set. Set it in contracts/deployer.env or on the host.");
@@ -85,12 +79,6 @@ async function fund(token: Address) {
     await send({ address: token, abi: erc20Abi, functionName: "approve", args: [addresses.swapRouter, maxUint256] } as never);
   }
   funded.add(token);
-}
-
-async function ethPriceUsd() {
-  const res = await fetch(ETH_PRICE_URL);
-  const { data } = (await res.json()) as { data: { amount: string } };
-  return Number(data.amount);
 }
 
 type Walk = { center: number; visits: number };
@@ -138,35 +126,40 @@ async function visit(market: Market) {
   log(`${market.symbol}: $${tickToUsd(tick, market).toFixed(4)} -> $${tickToUsd(target, market).toFixed(4)}`);
 }
 
-async function runAutomation() {
-  const args = ["workflow", "simulate", "automation", "--target", "base-sepolia", "-e", "base-sepolia.env"];
-  const { stdout, stderr } = await promisify(execFile)(
-    "cre",
-    [...args, "--non-interactive", "--trigger-index", "0", "--broadcast"],
-    { cwd: CRE_DIR, timeout: WORKFLOW_TIMEOUT_MS, maxBuffer: 10_000_000 },
-  );
-  const lines = `${stdout}\n${stderr}`.split("\n").filter((line) => /act #|workflow execution failed/.test(line));
-  log(`automation: ${lines.map((line) => line.replace(/.*USER LOG\]\s*/, "")).join(", ") || "nothing to do"}`);
+const describe = (error: Error) => error.message.split("\n")[0];
+const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+let lastAutomation = 0;
+
+/** Visits every pool once. Returns false when the wallet is too low to continue. */
+async function tradeRound() {
+  for (const market of await readMarkets(client)) {
+    const balance = await client.getBalance({ address: account.address });
+    if (balance < MIN_ETH) {
+      log(`stopping: ${formatEther(balance)} ETH left`);
+      return false;
+    }
+    await visit(market).catch((error: Error) => log(`${market.symbol} failed: ${describe(error)}`));
+    if (Date.now() - lastAutomation >= AUTOMATION_MS) {
+      lastAutomation = Date.now();
+      await runKeeper(client, wallet)
+        .then((result) => log(`keeper: ${result}`))
+        .catch((error: Error) => log(`keeper failed: ${describe(error)}`));
+    }
+    await pause(VISIT_MS);
+  }
+  return true;
 }
 
 async function main() {
   log(`trading from ${account.address}`);
-  let lastAutomation = 0;
   for (;;) {
-    const markets = await readMarkets(client);
-    for (const market of markets) {
-      const balance = await client.getBalance({ address: account.address });
-      if (balance < MIN_ETH) {
-        log(`stopping: ${formatEther(balance)} ETH left`);
-        return;
-      }
-      await visit(market).catch((error: Error) => log(`${market.symbol} failed: ${error.message.split("\n")[0]}`));
-      if (Date.now() - lastAutomation >= AUTOMATION_MS) {
-        lastAutomation = Date.now();
-        await runAutomation().catch((error: Error) => log(`automation failed: ${error.message.split("\n")[0]}`));
-      }
-      await new Promise((done) => setTimeout(done, VISIT_MS));
-    }
+    // A network failure is usually brief, so it must not end the bot.
+    const more = await tradeRound().catch((error: Error) => {
+      log(`round failed: ${describe(error)}`);
+      return true;
+    });
+    if (!more) return;
   }
 }
 

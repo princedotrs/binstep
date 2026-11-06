@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Runs the whole stack on this machine, on a private fork of Base Sepolia.
 #
-#   ./scripts/devnet.sh up            start chain, contracts, app (port 3001), automation
+#   ./scripts/devnet.sh up            start chain, contracts, app (port 3001)
 #   ./scripts/devnet.sh down          stop everything
 #   ./scripts/devnet.sh status        show what is running and the pool's tick
 #   ./scripts/devnet.sh fees [n]      swap back and forth n times (default 6) to earn fees
 #   ./scripts/devnet.sh price <usd>   swap the pool to a USD price
 #   ./scripts/devnet.sh warp [secs]   fast-forward chain time (default 300)
-#   ./scripts/devnet.sh logs          follow the automation output
 #
 # Keys here are Anvil's published test keys. Never point this at a real chain.
 set -euo pipefail
@@ -21,7 +20,7 @@ PRICE_API=https://api.coinbase.com/v2/prices/ETH-USD/spot
 DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 AIRDROP_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 DEPLOYMENT=$ROOT/contracts/deployments/devnet.json
-export PATH="$HOME/.foundry/bin:$HOME/.bun/bin:$HOME/.cre/bin:$PATH"
+export PATH="$HOME/.foundry/bin:$HOME/.bun/bin:$PATH"
 
 json() { python3 -c "import json;print(json.load(open('$DEPLOYMENT'))['$1'])"; }
 send() { cast send -q --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" "$@"; }
@@ -39,32 +38,6 @@ wait_for() { # description, then a test command
   local what=$1; shift
   for _ in $(seq 1 60); do "$@" >/dev/null 2>&1 && return 0; sleep 1; done
   echo "timed out waiting for $what"; exit 1
-}
-
-write_cre_config() {
-  python3 - "$DEPLOYMENT" "$PRICE_API" "$ROOT/cre/automation/config.local-fork.json" <<'CONFIG'
-import json, sys
-path, price_api, out = sys.argv[1:]
-data = json.load(open(path))
-seeded = [{"poolId": data["poolId"], "baseIsToken0": data["wethIsToken0"], "baseDecimals": 18, "priceApiUrl": price_api}]
-listed = [{"poolId": m["poolId"], "baseIsToken0": m["baseIsToken0"], "baseDecimals": m["decimals"]} for m in data["markets"]]
-json.dump({
-    "schedule": "*/30 * * * * *",
-    "chainSelectorName": "ethereum-testnet-sepolia-base-1",
-    "managerAddress": data["manager"],
-    "automationAddress": data["automation"],
-    "registryAddress": data["registry"],
-    "markets": seeded + listed,
-    "firstPositionId": 1,
-    "pageSize": 25,
-    "gasLimit": "9500000",
-    "maxPriceDeviationBps": 300,
-    "minCompoundUsd": 1,
-    "minDistanceBins": 2,
-    "maxTickDrift": 50,
-    "maxActions": 2,
-}, open(out, "w"), indent=2)
-CONFIG
 }
 
 start_chain() { # Anvil exits if its first upstream call fails, and public RPCs do stall
@@ -106,7 +79,6 @@ data = json.load(open('$DEPLOYMENT'))
 data['deployBlock'] = $start
 data['markets'] = json.load(open('$ROOT/contracts/deployments/devnet.markets.json'))
 json.dump(data, open('$DEPLOYMENT', 'w'))"
-  write_cre_config
 
   echo "Building the app"
   deployment=$(cat "$DEPLOYMENT")
@@ -116,12 +88,11 @@ json.dump(data, open('$DEPLOYMENT', 'w'))"
     AIRDROP_PRIVATE_KEY=$AIRDROP_KEY background web npx next start -p "$PORT")
   wait_for "the app" curl -fsS -o /dev/null "http://localhost:$PORT/"
 
-  (cd "$ROOT/cre" && background automation ./scripts/run-automation.sh 30 local-fork)
   echo "Ready: http://localhost:$PORT"
 }
 
 down() {
-  stop automation; stop web; stop anvil
+  stop web; stop anvil
   echo "Stopped"
 }
 
@@ -146,7 +117,7 @@ fees() {
   start=$(tick)
   for _ in $(seq 1 "$rounds"); do swap_to_tick $((start - 30)); swap_to_tick $((start + 30)); done
   swap_to_tick "$start"
-  echo "Swapped $rounds rounds. Run 'warp' so the automation sees a settled price."
+  echo "Swapped $rounds rounds. Run 'warp' so the price settles."
 }
 
 price() {
@@ -155,7 +126,7 @@ import math
 usd, weth_first = $1, '$(json wethIsToken0)' == 'True'
 raw = usd / 1e12 if weth_first else 1e12 / usd
 print(round(math.log(raw) / math.log(1.0001)))")"
-  echo "Pool at tick $(tick). Run 'warp' so the automation sees a settled price."
+  echo "Pool at tick $(tick). Run 'warp' so the price settles."
 }
 
 warp() {
@@ -165,7 +136,7 @@ warp() {
 }
 
 status() {
-  for name in anvil web automation; do
+  for name in anvil web; do
     if running "$name"; then echo "$name: running"; else echo "$name: stopped"; fi
   done
   if running anvil; then echo "tick: $(tick)"; fi
@@ -178,6 +149,5 @@ case "${1:-}" in
   fees) fees "${2:-6}" ;;
   price) price "${2:?usage: devnet.sh price <usd>}" ;;
   warp) warp "${2:-300}" ;;
-  logs) tail -f "$RUN/automation.log" ;;
-  *) sed -n 3,11p "$0" | cut -c3- ;;
+  *) sed -n 3,10p "$0" | cut -c3- ;;
 esac
