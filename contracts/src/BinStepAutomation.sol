@@ -28,6 +28,9 @@ contract BinStepAutomation is IReceiver, Ownable {
     uint256 private constant METADATA_OWNER_OFFSET = 42;
     uint256 private constant METADATA_MIN_LENGTH = 62;
 
+    /// @notice Covers a 32-bin rebalance, which measures about 2.2M gas.
+    uint256 public constant MIN_ACTION_GAS = 3_000_000;
+
     BinStepManager public immutable manager;
     address public forwarder;
     address public expectedWorkflowOwner;
@@ -47,6 +50,7 @@ contract BinStepAutomation is IReceiver, Ownable {
     error ReportTooOld(uint64 observedAt);
     error ReportFromFuture(uint64 observedAt);
     error OnlySelf();
+    error InsufficientGas();
     error RangeTooFarFromPrice(int24 newLowerBin, int24 referenceTick);
 
     constructor(BinStepManager manager_, address forwarder_, address owner_, int24 maxTickDeviation_, uint64 maxReportAge_)
@@ -91,6 +95,9 @@ contract BinStepAutomation is IReceiver, Ownable {
 
         // One bad action must not block the rest of the batch.
         for (uint256 i; i < actions.length; ++i) {
+            // Otherwise an out-of-gas action would be caught and look like a skip,
+            // consuming the report. Reverting keeps it retryable.
+            if (gasleft() < MIN_ACTION_GAS) revert InsufficientGas();
             try this.execute(actions[i]) {
                 emit ActionExecuted(actions[i].positionId, actions[i].kind);
             } catch (bytes memory reason) {

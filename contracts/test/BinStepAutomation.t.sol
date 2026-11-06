@@ -140,6 +140,21 @@ contract BinStepAutomationTest is BinStepFixture {
         assertEq(lp.getPosition(optedIn).lowerBin, -2);
     }
 
+    function test_tooLittleGasRevertsInsteadOfSilentlySkipping() public {
+        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 10e18, 10e18);
+        BinStepAutomation.Action[] memory actions = _action(BinStepAutomation.ActionKind.Rebalance, p, -2, 0);
+        bytes memory report = abi.encode(uint64(1_800_000_000), actions);
+
+        vm.prank(forwarder);
+        vm.expectRevert(BinStepAutomation.InsufficientGas.selector);
+        auto_.onReport{gas: 1_000_000}(metadata, report);
+
+        assertEq(auto_.lastObservedAt(), 0, "a failed delivery must stay retryable");
+        vm.prank(forwarder);
+        auto_.onReport{gas: 4_000_000}(metadata, report);
+        assertEq(lp.getPosition(p).lowerBin, -2);
+    }
+
     function test_outsidersCannotCallExecuteDirectly() public {
         BinStepAutomation.Action memory a = BinStepAutomation.Action(BinStepAutomation.ActionKind.Compound, 1, 0, 0);
         vm.expectRevert(BinStepAutomation.OnlySelf.selector);
@@ -157,7 +172,7 @@ contract BinStepAutomationTest is BinStepFixture {
         vm.stopPrank();
     }
 
-    function test_gasForMaxSizeRebalanceFitsTheDefaultReportBudget() public {
+    function test_maxSizeRebalanceFitsTheMinimumActionGas() public {
         uint256 p = _mint(alice, -16, 32, Strategy.Curve, 50e18, 50e18);
         BinStepAutomation.Action[] memory actions =
             _action(BinStepAutomation.ActionKind.Rebalance, p, -15, _tick());
@@ -167,7 +182,7 @@ contract BinStepAutomationTest is BinStepFixture {
         uint256 used = start - gasleft();
         emit log_named_uint("gas for 32-bin rebalance", used);
         assertEq(lp.getPosition(p).lowerBin, -15);
-        assertLt(used, 5_000_000);
+        assertLt(used, auto_.MIN_ACTION_GAS());
     }
 
     function _assertSkipped(uint256 p) internal {
