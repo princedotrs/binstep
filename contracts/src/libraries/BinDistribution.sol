@@ -23,6 +23,12 @@ library BinDistribution {
         bool hasActive;
     }
 
+    /// @dev Floors toward negative infinity so that bin -1 covers ticks [-spacing, 0).
+    function binOf(int24 tick, int24 spacing) internal pure returns (int24 bin) {
+        bin = tick / spacing;
+        if (tick < 0 && tick % spacing != 0) bin -= 1;
+    }
+
     function tickLower(int24 lowerBin, uint256 index, int24 spacing) internal pure returns (int24) {
         return int24((int256(lowerBin) + int256(index)) * spacing);
     }

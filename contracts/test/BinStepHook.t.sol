@@ -65,11 +65,35 @@ contract BinStepHookTest is Test, Deployers {
         assertEq(hook.currentFee(id), hook.BASE_FEE());
     }
 
-    function test_feeRisesWithBinsCrossed() public {
+    /// variableFee = ceil(C * (va * binStep)^2 / 1e11), in Meteora's 1e9 fee units.
+    function _feeForBins(uint256 bins) internal view returns (uint256) {
+        uint256 va = bins * 10_000;
+        uint256 scaled = hook.VARIABLE_FEE_CONTROL() * (va * 10) ** 2;
+        uint256 variable1e9 = (scaled + 1e11 - 1) / 1e11;
+        uint256 fee = hook.BASE_FEE() + (variable1e9 + 999) / 1000;
+        return fee > hook.MAX_FEE() ? hook.MAX_FEE() : fee;
+    }
+
+    function _activeBin() internal view returns (int256 bin) {
+        (, int24 tick,,) = manager.getSlot0(id);
+        bin = int256(tick) / 10;
+        if (tick < 0 && tick % 10 != 0) bin -= 1;
+    }
+
+    function test_feeFollowsTheVolatilityFormula() public {
         swap(key, true, -1e18, ZERO_BYTES);
-        (, uint256 moved) = _moved();
-        assertGt(moved, 0);
-        assertEq(hook.currentFee(id), hook.BASE_FEE() + hook.FEE_PER_BIN() * moved);
+        uint256 bins = uint256(-_activeBin());
+        assertGt(bins, 1);
+        assertEq(hook.currentFee(id), _feeForBins(bins));
+    }
+
+    function test_variableFeeGrowsWithTheSquareOfBinsCrossed() public {
+        swap(key, true, -5e17, ZERO_BYTES);
+        uint256 bins = uint256(-_activeBin());
+        assertGt(bins, 4);
+        uint256 full = hook.currentFee(id) - hook.BASE_FEE();
+        uint256 half = _feeForBins(bins / 2) - hook.BASE_FEE();
+        assertGt(full, 3 * half);
     }
 
     function test_smallSwapAcrossABinBoundaryCountsAsOneBin() public {
@@ -77,7 +101,7 @@ contract BinStepHookTest is Test, Deployers {
         (, int24 tick,,) = manager.getSlot0(id);
         assertLt(tick, 0);
         assertGt(tick, -10, "swap should stay inside the next bin");
-        assertEq(hook.currentFee(id), hook.BASE_FEE() + hook.FEE_PER_BIN());
+        assertEq(hook.currentFee(id), _feeForBins(1));
     }
 
     function test_movementInsideOneBinDoesNotRaiseTheFee() public {
@@ -88,21 +112,37 @@ contract BinStepHookTest is Test, Deployers {
         assertEq(hook.currentFee(id), hook.BASE_FEE());
     }
 
-    function test_feeDecaysOverTime() public {
+    function test_rapidSwapsKeepTheSameIndexReference() public {
+        // Inside the filter period, volatility is measured from the same starting bin.
         swap(key, true, -1e18, ZERO_BYTES);
-        (uint24 before,) = _moved();
-        vm.warp(block.timestamp + hook.DECAY_PERIOD());
-        uint24 afterOne = hook.currentFee(id);
-        assertLt(afterOne, before);
-        assertGt(afterOne, hook.BASE_FEE());
-        vm.warp(block.timestamp + 40 * hook.DECAY_PERIOD());
+        swap(key, true, -1e18, ZERO_BYTES);
+        assertEq(hook.currentFee(id), _feeForBins(uint256(-_activeBin())));
+    }
+
+    function test_feeIsUnchangedInsideTheFilterPeriod() public {
+        swap(key, true, -1e18, ZERO_BYTES);
+        uint24 fee = hook.currentFee(id);
+        vm.warp(1 + hook.FILTER_PERIOD() - 1);
+        assertEq(hook.currentFee(id), fee);
+    }
+
+    function test_feeReducesAfterTheFilterPeriod() public {
+        swap(key, true, -3e18, ZERO_BYTES);
+        uint24 fee = hook.currentFee(id);
+        vm.warp(1 + hook.FILTER_PERIOD());
+        uint24 reduced = hook.currentFee(id);
+        assertLt(reduced, fee);
+        assertGt(reduced, hook.BASE_FEE());
+    }
+
+    function test_feeResetsAfterTheDecayPeriod() public {
+        swap(key, true, -1e18, ZERO_BYTES);
+        vm.warp(1 + hook.DECAY_PERIOD());
         assertEq(hook.currentFee(id), hook.BASE_FEE());
     }
 
     function test_feeIsCapped() public {
-        for (uint256 i; i < 12; ++i) {
-            swap(key, i % 2 == 0, -3e19, ZERO_BYTES);
-        }
+        swap(key, true, -6e19, ZERO_BYTES);
         assertEq(hook.currentFee(id), hook.MAX_FEE());
     }
 
@@ -113,9 +153,38 @@ contract BinStepHookTest is Test, Deployers {
         assertEq(_feeChargedOnSwap(), expected);
     }
 
-    function _moved() internal view returns (uint24 fee, uint256 moved) {
-        fee = hook.currentFee(id);
-        moved = (fee - hook.BASE_FEE()) / hook.FEE_PER_BIN();
+    // ---- time-weighted price ----
+
+    function test_stableTickIgnoresSameBlockManipulation() public {
+        swap(key, true, -5e18, ZERO_BYTES);
+        (, int24 live,,) = manager.getSlot0(id);
+        assertLt(live, -100);
+        assertEq(hook.stableTick(id), 0);
+    }
+
+    function test_stableTickMovesInProportionToTime() public {
+        swap(key, true, -5e18, ZERO_BYTES);
+        (, int24 live,,) = manager.getSlot0(id);
+        vm.warp(1 + hook.STABLE_WINDOW() / 2);
+        assertEq(hook.stableTick(id), live / 2);
+    }
+
+    function test_stableTickCatchesUpAfterTheWindow() public {
+        swap(key, true, -5e18, ZERO_BYTES);
+        (, int24 live,,) = manager.getSlot0(id);
+        vm.warp(1 + hook.STABLE_WINDOW());
+        assertEq(hook.stableTick(id), live);
+    }
+
+    function test_shortSpikeBarelyMovesTheStableTick() public {
+        swap(key, true, -5e18, ZERO_BYTES);
+        vm.warp(1 + 1);
+        swap(key, false, -5e18, ZERO_BYTES);
+        assertLt(_abs(hook.stableTick(id)), 10);
+    }
+
+    function _abs(int24 x) internal pure returns (int256) {
+        return x < 0 ? -int256(x) : int256(x);
     }
 
     function _feeChargedOnSwap() internal returns (uint24 fee) {

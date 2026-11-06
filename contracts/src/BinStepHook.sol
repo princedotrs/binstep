@@ -11,30 +11,50 @@ import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/type
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BinDistribution} from "./libraries/BinDistribution.sol";
 
-/// @notice Restricts liquidity to the BinStep manager and charges a fee that
-/// rises with recent price movement. It never returns swap deltas and never
-/// blocks removals, so it cannot take swapper funds or trap LP funds.
+/// @notice Restricts liquidity to the BinStep manager, charges a Meteora DLMM
+/// style volatility fee, and keeps a time-weighted price that v4 pools lack. It
+/// never returns swap deltas and never blocks removals, so it cannot take
+/// swapper funds or trap LP funds.
+/// @dev A bin is one tickSpacing wide. One tick is 1 bp of price, so tickSpacing
+/// plays the role of Meteora's binStep. Fee math follows Meteora's published
+/// formulas, with its 1e9 fee rates converted to v4's 1e6 units. v4 fixes the fee
+/// for a whole swap, so unlike Meteora it cannot step up per bin inside one swap.
 contract BinStepHook is BaseHook {
     using LPFeeLibrary for uint24;
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
     uint24 public constant BASE_FEE = 500;
-    uint24 public constant FEE_PER_BIN = 100;
     uint24 public constant MAX_FEE = 10_000;
-    uint256 public constant DECAY_PERIOD = 60;
 
-    uint256 private constant MAX_VOLATILITY = (MAX_FEE - BASE_FEE) / FEE_PER_BIN;
+    uint256 public constant VARIABLE_FEE_CONTROL = 100_000;
+    uint256 public constant MAX_VOLATILITY_ACCUMULATOR = 350_000;
+    uint256 public constant VOLATILITY_PER_BIN = 10_000;
+    uint256 public constant REDUCTION_FACTOR = 5_000;
+    uint256 public constant FILTER_PERIOD = 30;
+    uint256 public constant DECAY_PERIOD = 600;
 
-    struct FeeState {
+    /// @notice Seconds a price must hold before the stable tick fully reflects it.
+    uint256 public constant STABLE_WINDOW = 300;
+
+    uint256 private constant BPS = 10_000;
+    uint256 private constant VARIABLE_FEE_PRECISION = 1e11;
+    uint256 private constant FEE_UNIT_CONVERSION = 1_000;
+
+    struct PoolState {
         int24 lastTick;
+        int24 stableTick;
+        int24 indexReference;
+        int24 tickSpacing;
         uint40 lastUpdate;
-        uint32 volatility;
+        uint32 volatilityReference;
+        uint32 volatilityAccumulator;
     }
 
     address public immutable manager;
-    mapping(PoolId => FeeState) public feeStates;
+    mapping(PoolId => PoolState) public poolStates;
 
     error OnlyManager(address sender);
     error DynamicFeeRequired();
@@ -64,8 +84,17 @@ contract BinStepHook is BaseHook {
 
     /// @notice The LP fee, in hundredths of a bip, the next swap would pay.
     function currentFee(PoolId id) public view returns (uint24) {
-        uint256 volatility = _decayedVolatility(feeStates[id]);
-        return uint24(BASE_FEE + volatility * FEE_PER_BIN);
+        PoolState memory state = poolStates[id];
+        int24 activeBin = BinDistribution.binOf(state.lastTick, state.tickSpacing);
+        (int24 indexReference, uint256 volatilityReference) = _references(state, activeBin);
+        uint256 accumulator = _accumulator(volatilityReference, indexReference, activeBin);
+        return _fee(accumulator, state.tickSpacing);
+    }
+
+    /// @notice A time-weighted tick. Price moves in the current block do not affect
+    /// it, so moving it means holding a manipulated price for real time.
+    function stableTick(PoolId id) external view returns (int24) {
+        return _stableTick(poolStates[id]);
     }
 
     function _beforeInitialize(address, PoolKey calldata key, uint160) internal pure override returns (bytes4) {
@@ -78,7 +107,15 @@ contract BinStepHook is BaseHook {
         override
         returns (bytes4)
     {
-        feeStates[key.toId()] = FeeState({lastTick: tick, lastUpdate: uint40(block.timestamp), volatility: 0});
+        poolStates[key.toId()] = PoolState({
+            lastTick: tick,
+            stableTick: tick,
+            indexReference: BinDistribution.binOf(tick, key.tickSpacing),
+            tickSpacing: key.tickSpacing,
+            lastUpdate: uint40(block.timestamp),
+            volatilityReference: 0,
+            volatilityAccumulator: 0
+        });
         return this.afterInitialize.selector;
     }
 
@@ -108,27 +145,62 @@ contract BinStepHook is BaseHook {
         returns (bytes4, int128)
     {
         PoolId id = key.toId();
-        FeeState storage state = feeStates[id];
+        PoolState storage state = poolStates[id];
+        PoolState memory previous = state;
         (, int24 tick,,) = poolManager.getSlot0(id);
 
-        int256 change = _binOf(tick, key.tickSpacing) - _binOf(state.lastTick, key.tickSpacing);
-        uint256 binsMoved = change < 0 ? uint256(-change) : uint256(change);
-        uint256 volatility = _decayedVolatility(state) + binsMoved;
+        int24 previousBin = BinDistribution.binOf(previous.lastTick, previous.tickSpacing);
+        (int24 indexReference, uint256 volatilityReference) = _references(previous, previousBin);
+        int24 activeBin = BinDistribution.binOf(tick, previous.tickSpacing);
 
-        state.volatility = uint32(volatility > MAX_VOLATILITY ? MAX_VOLATILITY : volatility);
+        state.stableTick = _stableTick(previous);
         state.lastTick = tick;
+        state.indexReference = indexReference;
+        state.volatilityReference = uint32(volatilityReference);
+        state.volatilityAccumulator = uint32(_accumulator(volatilityReference, indexReference, activeBin));
         state.lastUpdate = uint40(block.timestamp);
         return (this.afterSwap.selector, 0);
     }
 
-    /// @dev Floors toward negative infinity so that bin -1 covers ticks [-spacing, 0).
-    function _binOf(int24 tick, int24 spacing) private pure returns (int256 bin) {
-        bin = int256(tick) / spacing;
-        if (tick < 0 && tick % spacing != 0) bin -= 1;
+    /// @dev Rapid swaps share a reference, moderate gaps reduce it, long gaps reset it.
+    function _references(PoolState memory state, int24 activeBin)
+        private
+        view
+        returns (int24 indexReference, uint256 volatilityReference)
+    {
+        uint256 elapsed = block.timestamp - state.lastUpdate;
+        if (elapsed < FILTER_PERIOD) return (state.indexReference, state.volatilityReference);
+        if (elapsed < DECAY_PERIOD) return (activeBin, state.volatilityAccumulator * REDUCTION_FACTOR / BPS);
+        return (activeBin, 0);
     }
 
-    function _decayedVolatility(FeeState memory state) private view returns (uint256) {
-        uint256 halvings = (block.timestamp - state.lastUpdate) / DECAY_PERIOD;
-        return halvings >= 32 ? 0 : uint256(state.volatility) >> halvings;
+    function _accumulator(uint256 volatilityReference, int24 indexReference, int24 activeBin)
+        private
+        pure
+        returns (uint256)
+    {
+        int256 distance = int256(indexReference) - int256(activeBin);
+        uint256 binsMoved = distance < 0 ? uint256(-distance) : uint256(distance);
+        uint256 accumulator = volatilityReference + binsMoved * VOLATILITY_PER_BIN;
+        return accumulator > MAX_VOLATILITY_ACCUMULATOR ? MAX_VOLATILITY_ACCUMULATOR : accumulator;
+    }
+
+    function _fee(uint256 accumulator, int24 binStep) private pure returns (uint24) {
+        uint256 step = accumulator * uint24(binStep);
+        uint256 variable1e9 = _divUp(VARIABLE_FEE_CONTROL * step * step, VARIABLE_FEE_PRECISION);
+        uint256 fee = BASE_FEE + _divUp(variable1e9, FEE_UNIT_CONVERSION);
+        return fee > MAX_FEE ? MAX_FEE : uint24(fee);
+    }
+
+    /// @dev The price held since the last swap pulls the average toward itself.
+    function _stableTick(PoolState memory state) private view returns (int24) {
+        uint256 elapsed = block.timestamp - state.lastUpdate;
+        if (elapsed >= STABLE_WINDOW) return state.lastTick;
+        int256 gap = int256(state.lastTick) - int256(state.stableTick);
+        return int24(int256(state.stableTick) + gap * int256(elapsed) / int256(STABLE_WINDOW));
+    }
+
+    function _divUp(uint256 numerator, uint256 denominator) private pure returns (uint256) {
+        return numerator == 0 ? 0 : (numerator - 1) / denominator + 1;
     }
 }
