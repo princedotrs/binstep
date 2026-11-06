@@ -6,6 +6,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {FixedPoint128} from "@uniswap/v4-core/src/libraries/FixedPoint128.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
@@ -51,6 +53,26 @@ contract BinStepManager is IUnlockCallback, Ownable {
         int24 maxTick;
         bool autoCompound;
         bool autoRebalance;
+    }
+
+    /// @notice Everything an automation run needs for one position, in one read.
+    struct PositionSnapshot {
+        uint256 positionId;
+        address owner;
+        PoolId poolId;
+        int24 lowerBin;
+        uint8 numBins;
+        bool autoCompound;
+        bool autoRebalance;
+        bool inRange;
+        int24 successorLowerBin;
+        int24 liveTick;
+        int24 stableTick;
+        uint256 pending0;
+        uint256 pending1;
+        uint256 idle0;
+        uint256 idle1;
+        uint256 nextRebalanceAt;
     }
 
     enum Op {
@@ -127,6 +149,74 @@ contract BinStepManager is IUnlockCallback, Ownable {
 
     function getBinLiquidity(uint256 positionId) external view returns (uint128[] memory) {
         return binLiquidity[positionId];
+    }
+
+    /// @notice Fees earned across all of a position's bins and not yet collected.
+    function pendingFees(uint256 positionId) public view returns (uint256 amount0, uint256 amount1) {
+        Position storage p = positions[positionId];
+        uint128[] memory bins = binLiquidity[positionId];
+        PoolId poolId = p.key.toId();
+        int24 spacing = p.key.tickSpacing;
+
+        for (uint256 i; i < bins.length; ++i) {
+            if (bins[i] == 0) continue;
+            int24 lower = BinDistribution.tickLower(p.lowerBin, i, spacing);
+            int24 upper = lower + spacing;
+            (uint256 inside0, uint256 inside1) = poolManager.getFeeGrowthInside(poolId, lower, upper);
+            (, uint256 last0, uint256 last1) =
+                poolManager.getPositionInfo(poolId, address(this), lower, upper, bytes32(positionId));
+            unchecked {
+                amount0 += FullMath.mulDiv(inside0 - last0, bins[i], FixedPoint128.Q128);
+                amount1 += FullMath.mulDiv(inside1 - last1, bins[i], FixedPoint128.Q128);
+            }
+        }
+    }
+
+    /// @notice Open positions with ids in [firstId, firstId + count).
+    /// @dev One call, because CRE allows 15 chain reads per run and a position has
+    /// up to 32 bins.
+    function automationSnapshot(uint256 firstId, uint256 count)
+        external
+        view
+        returns (PositionSnapshot[] memory snapshots)
+    {
+        uint256 end = firstId + count > lastPositionId + 1 ? lastPositionId + 1 : firstId + count;
+        uint256 found;
+        snapshots = new PositionSnapshot[](end > firstId ? end - firstId : 0);
+        for (uint256 id = firstId; id < end; ++id) {
+            if (positions[id].owner == address(0)) continue;
+            snapshots[found++] = _snapshot(id);
+        }
+        assembly ("memory-safe") {
+            mstore(snapshots, found)
+        }
+    }
+
+    function _snapshot(uint256 id) private view returns (PositionSnapshot memory s) {
+        Position storage p = positions[id];
+        PoolId poolId = p.key.toId();
+        (, int24 tick,,) = poolManager.getSlot0(poolId);
+        int24 activeBin = BinDistribution.binOf(tick, p.key.tickSpacing);
+        bool inRange = activeBin >= p.lowerBin && activeBin < p.lowerBin + int24(uint24(p.numBins));
+        (uint256 pending0, uint256 pending1) = pendingFees(id);
+        uint256 last = lastKeeperRebalance[id];
+
+        s.positionId = id;
+        s.owner = p.owner;
+        s.poolId = poolId;
+        s.lowerBin = p.lowerBin;
+        s.numBins = p.numBins;
+        s.autoCompound = p.autoCompound;
+        s.autoRebalance = p.autoRebalance;
+        s.inRange = inRange;
+        s.successorLowerBin = inRange ? p.lowerBin : successorLowerBin(id);
+        s.liveTick = tick;
+        s.stableTick = IStableTick(address(p.key.hooks)).stableTick(poolId);
+        s.pending0 = pending0;
+        s.pending1 = pending1;
+        s.idle0 = p.idle0;
+        s.idle1 = p.idle1;
+        s.nextRebalanceAt = last == 0 ? 0 : last + minRebalanceInterval;
     }
 
     function mint(MintParams calldata params) external returns (uint256 positionId) {

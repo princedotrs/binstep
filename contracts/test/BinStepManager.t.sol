@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+import {Vm} from "forge-std/Test.sol";
 import {BinStepFixture} from "./BinStepFixture.sol";
 import {BinStepManager} from "../src/BinStepManager.sol";
 import {BinDistribution} from "../src/libraries/BinDistribution.sol";
@@ -346,6 +347,79 @@ contract BinStepManagerTest is BinStepFixture {
         int24 tick = _tick();
         assertLt(tick, 0);
         assertEq(lp.successorLowerBin(p), BinDistribution.binOf(tick, SPACING) + 1);
+    }
+
+    // ---- automation snapshot ----
+
+    function test_pendingFeesMatchWhatCompoundCollects() public {
+        uint256 p = _mint(alice, -10, 20, Strategy.Spot, 100e18, 100e18);
+        _roundTrip(10);
+        (uint256 pending0, uint256 pending1) = lp.pendingFees(p);
+        assertGt(pending0, 0);
+        assertGt(pending1, 0);
+
+        vm.recordLogs();
+        vm.prank(alice);
+        lp.compound(p, ANY_MIN, ANY_MAX);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 topic = keccak256("Compounded(uint256,uint256,uint256)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].topics[0] != topic) continue;
+            (uint256 fees0, uint256 fees1) = abi.decode(logs[i].data, (uint256, uint256));
+            assertEq(fees0, pending0);
+            assertEq(fees1, pending1);
+            return;
+        }
+        fail();
+    }
+
+    function test_snapshotDescribesAnInRangePosition() public {
+        uint256 p = _mint(alice, -3, 6, Strategy.Curve, 10e18, 10e18);
+        BinStepManager.PositionSnapshot[] memory all = lp.automationSnapshot(1, 10);
+        assertEq(all.length, 1);
+        BinStepManager.PositionSnapshot memory s = all[0];
+        assertEq(s.positionId, p);
+        assertEq(s.owner, alice);
+        assertEq(s.lowerBin, -3);
+        assertEq(s.numBins, 6);
+        assertTrue(s.autoCompound);
+        assertTrue(s.autoRebalance);
+        assertTrue(s.inRange);
+        assertEq(s.successorLowerBin, -3, "an in-range position has nowhere to go");
+        assertEq(s.liveTick, 0);
+        assertEq(s.stableTick, 0);
+        assertEq(s.nextRebalanceAt, 0);
+    }
+
+    function test_snapshotDescribesAnOutOfRangePosition() public {
+        _background();
+        uint256 p = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        swap(key, true, -300e18, ZERO_BYTES);
+        BinStepManager.PositionSnapshot memory s = lp.automationSnapshot(p, 1)[0];
+        assertFalse(s.inRange);
+        assertEq(s.successorLowerBin, lp.successorLowerBin(p));
+        assertEq(s.liveTick, _tick());
+        assertEq(s.stableTick, 0);
+
+        vm.warp(block.timestamp + hook.STABLE_WINDOW());
+        vm.prank(keeper);
+        lp.keeperRebalance(p);
+        assertEq(lp.automationSnapshot(p, 1)[0].nextRebalanceAt, block.timestamp + COOLDOWN);
+    }
+
+    function test_snapshotSkipsClosedPositionsAndPagesSafely() public {
+        uint256 a = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        uint256 b = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        uint256 c = _mint(alice, -3, 6, Strategy.Spot, 1e18, 1e18);
+        vm.prank(alice);
+        lp.close(b);
+
+        BinStepManager.PositionSnapshot[] memory all = lp.automationSnapshot(1, 50);
+        assertEq(all.length, 2);
+        assertEq(all[0].positionId, a);
+        assertEq(all[1].positionId, c);
+        assertEq(lp.automationSnapshot(1, 1).length, 1);
+        assertEq(lp.automationSnapshot(100, 5).length, 0);
     }
 
     function _assertTokensSafe(uint256 p) internal {
