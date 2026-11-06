@@ -66,6 +66,17 @@ that script lists the commands that earn fees, move the price and fast-forward t
 
 The mixnet cannot reach `localhost`, so devnet reads use the local RPC directly.
 
+## Demo bot
+
+`../scripts/demo-bot.sh start` trades on every pool and runs the automation workflow, so
+positions earn fees, fall out of range and get compounded and rebalanced. It uses
+`contracts/deployer.env`, and stops itself when that wallet runs low on ETH. It stops when
+this machine sleeps. `../scripts/demo-bot.sh stop` ends it, and `logs` follows it.
+
+On Railway it runs from `railway.json` and `scripts/bot.Dockerfile`, so it does not depend on this
+machine. Set `DEPLOYER_KEY` and `CRE_API_KEY` on the Railway service. Run only one bot at a time,
+because both would send from the same wallet.
+
 ## Deploying to Vercel
 
 Set the project's root directory to `web`, and set `AIRDROP_PRIVATE_KEY`.
