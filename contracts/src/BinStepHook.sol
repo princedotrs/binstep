@@ -111,14 +111,20 @@ contract BinStepHook is BaseHook {
         FeeState storage state = feeStates[id];
         (, int24 tick,,) = poolManager.getSlot0(id);
 
-        int256 change = int256(tick) - int256(state.lastTick);
-        uint256 binsMoved = (change < 0 ? uint256(-change) : uint256(change)) / uint24(key.tickSpacing);
+        int256 change = _binOf(tick, key.tickSpacing) - _binOf(state.lastTick, key.tickSpacing);
+        uint256 binsMoved = change < 0 ? uint256(-change) : uint256(change);
         uint256 volatility = _decayedVolatility(state) + binsMoved;
 
         state.volatility = uint32(volatility > MAX_VOLATILITY ? MAX_VOLATILITY : volatility);
         state.lastTick = tick;
         state.lastUpdate = uint40(block.timestamp);
         return (this.afterSwap.selector, 0);
+    }
+
+    /// @dev Floors toward negative infinity so that bin -1 covers ticks [-spacing, 0).
+    function _binOf(int24 tick, int24 spacing) private pure returns (int256 bin) {
+        bin = int256(tick) / spacing;
+        if (tick < 0 && tick % spacing != 0) bin -= 1;
     }
 
     function _decayedVolatility(FeeState memory state) private view returns (uint256) {

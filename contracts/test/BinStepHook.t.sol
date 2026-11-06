@@ -7,6 +7,8 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
@@ -14,6 +16,8 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 import {BinStepHook} from "../src/BinStepHook.sol";
 
 contract BinStepHookTest is Test, Deployers {
+    using StateLibrary for IPoolManager;
+
     BinStepHook hook;
     PoolId id;
 
@@ -66,6 +70,22 @@ contract BinStepHookTest is Test, Deployers {
         (, uint256 moved) = _moved();
         assertGt(moved, 0);
         assertEq(hook.currentFee(id), hook.BASE_FEE() + hook.FEE_PER_BIN() * moved);
+    }
+
+    function test_smallSwapAcrossABinBoundaryCountsAsOneBin() public {
+        swap(key, true, -3e16, ZERO_BYTES);
+        (, int24 tick,,) = manager.getSlot0(id);
+        assertLt(tick, 0);
+        assertGt(tick, -10, "swap should stay inside the next bin");
+        assertEq(hook.currentFee(id), hook.BASE_FEE() + hook.FEE_PER_BIN());
+    }
+
+    function test_movementInsideOneBinDoesNotRaiseTheFee() public {
+        swap(key, false, -3e16, ZERO_BYTES);
+        (, int24 tick,,) = manager.getSlot0(id);
+        assertGt(tick, 0);
+        assertLt(tick, 10);
+        assertEq(hook.currentFee(id), hook.BASE_FEE());
     }
 
     function test_feeDecaysOverTime() public {
