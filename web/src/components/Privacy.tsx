@@ -10,7 +10,7 @@ export function PrivacyBadge() {
   const status = useAnonStatus();
   const style = {
     connecting: ["bg-warn", "text-warn"],
-    private: ["bg-usdc", "text-usdc"],
+    private: ["bg-good", "text-good"],
     failed: ["bg-bad", "text-bad"],
     plain: ["bg-bad", "text-bad"],
   }[status.state];
@@ -38,13 +38,13 @@ export function PrivacyBanner() {
   if (status.state === "failed") {
     return (
       <div role="alert" className="border-b border-line bg-panel">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-3 text-sm">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3 text-sm">
           <p className="min-w-60 flex-1">
             Nox and Nym both failed, so nothing is being read. A plain RPC would work, but it can see your IP address and
             which wallet you look up.
           </p>
           <button
-            className="rounded-md bg-text px-3 py-1.5 font-medium text-ink"
+            className="rounded-lg bg-text px-3 py-1.5 font-medium text-ink"
             onClick={() => {
               anonRoute.retry();
               refresh();
@@ -68,7 +68,7 @@ export function PrivacyBanner() {
   if (status.state === "plain") {
     return (
       <div className="border-b border-line bg-panel">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-2 text-sm text-muted">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-2 text-sm text-muted">
           <p className="flex-1">You chose plain RPC. Reads are not anonymized.</p>
           <button
             className="text-text underline"

@@ -67,6 +67,58 @@ export function previewShape(
   });
 }
 
+/** Soft outline of each strategy, for decoration only. Bars always use strategyWeights. */
+export function shapeCurve(strategy: Strategy, u: number): number {
+  const d = (2 * u - 1) ** 2;
+  if (strategy === 0) return 1;
+  return strategy === 1 ? 1 - d : d;
+}
+
+const LIQUIDITY_UNIT = 10n ** 18n;
+
+/** Token amounts one unit of k would cost, as in BinDistribution's cost0 and cost1. */
+export function depositSplit(strategy: Strategy, lowerBin: number, n: number, tick: number, wethIsToken0: boolean) {
+  const bins = strategyWeights(strategy, n).map((weight, i) => ({
+    bin: lowerBin + i,
+    liquidity: BigInt(weight) * LIQUIDITY_UNIT,
+  }));
+  return poolLiquidity(bins, tick, wethIsToken0);
+}
+
+/** Share of the last day's fees this deposit would have taken while the price sat in activeBin. */
+export function estimateEarnings(p: {
+  strategy: Strategy;
+  lowerBin: number;
+  numBins: number;
+  tick: number;
+  activeBin: number;
+  usdPrice: number;
+  wethIsToken0: boolean;
+  depositUsd: number;
+  bins: { bin: number; liquidity: bigint }[];
+  fees24h: number;
+}) {
+  const index = p.activeBin - p.lowerBin;
+  if (p.depositUsd <= 0 || index < 0 || index >= p.numBins) return { perDay: 0, apr: 0 };
+  const unit = depositSplit(p.strategy, p.lowerBin, p.numBins, p.tick, p.wethIsToken0);
+  const k = p.depositUsd / (unit.weth * p.usdPrice + unit.usdc);
+  const mine = k * strategyWeights(p.strategy, p.numBins)[index] * Number(LIQUIDITY_UNIT);
+  const existing = Number(p.bins.find((b) => b.bin === p.activeBin)?.liquidity ?? 0n);
+  const perDay = (p.fees24h * mine) / (mine + existing);
+  return { perDay, apr: (perDay * 365 * 100) / p.depositUsd };
+}
+
+/** Mirrors BinStepManager.successorLowerBin. */
+export function successorBin(lowerBin: number, n: number, activeBin: number): number | null {
+  if (activeBin >= lowerBin + n) return activeBin - n;
+  return activeBin < lowerBin ? activeBin + 1 : null;
+}
+
+/** How much deeper this range is than the same capital spread across all prices. */
+export function capitalEfficiency(n: number): number {
+  return 1 / (1 - TICK_BASE ** ((-n * TICK_SPACING) / 4));
+}
+
 /** The automation workflow's minDistanceBins: smaller moves are not worth the gas. */
 const MIN_REBALANCE_BINS = 2;
 

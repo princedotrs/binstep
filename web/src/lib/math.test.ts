@@ -1,5 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { binOf, binToUsd, poolLiquidity, previewShape, rangeState, strategyWeights, tickToUsd, usdToTick } from "./math";
+import {
+  binOf,
+  binToUsd,
+  capitalEfficiency,
+  depositSplit,
+  estimateEarnings,
+  poolLiquidity,
+  previewShape,
+  rangeState,
+  shapeCurve,
+  strategyWeights,
+  successorBin,
+  tickToUsd,
+  usdToTick,
+} from "./math";
 
 describe("prices", () => {
   test("a live tick reads as the real price", () => {
@@ -120,5 +134,81 @@ describe("poolLiquidity", () => {
 
   test("an empty pool is zero", () => {
     expect(poolLiquidity([], 0, true)).toEqual({ weth: 0, usdc: 0 });
+  });
+});
+
+describe("depositSplit", () => {
+  test("a range above the price needs only WETH", () => {
+    const split = depositSplit(1, 5, 8, 0, true);
+    expect(split.usdc).toBe(0);
+    expect(split.weth).toBeGreaterThan(0);
+  });
+  test("a range below the price needs only USDC", () => {
+    const split = depositSplit(1, -20, 8, 0, true);
+    expect(split.weth).toBe(0);
+  });
+  test("a centered Spot range values both sides about evenly", () => {
+    const tick = usdToTick(2200, true);
+    const { weth, usdc } = depositSplit(0, binOf(tick) - 8, 17, tick, true);
+    expect(Math.abs((weth * 2200) / usdc - 1)).toBeLessThan(0.15);
+  });
+});
+
+describe("estimateEarnings", () => {
+  const tick = usdToTick(2200, true);
+  const active = binOf(tick);
+  const base = { strategy: 0 as const, lowerBin: active - 4, numBins: 8, tick, activeBin: active, usdPrice: 2200, wethIsToken0: true };
+  const pool = [{ bin: active, liquidity: 10n ** 18n }];
+  test("no deposit earns nothing", () => {
+    expect(estimateEarnings({ ...base, depositUsd: 0, bins: pool, fees24h: 100 })).toEqual({ perDay: 0, apr: 0 });
+  });
+  test("out of range earns nothing", () => {
+    const out = estimateEarnings({ ...base, activeBin: active + 50, depositUsd: 1000, bins: pool, fees24h: 100 });
+    expect(out).toEqual({ perDay: 0, apr: 0 });
+  });
+  test("an empty active bin would take all the fees", () => {
+    const { perDay } = estimateEarnings({ ...base, depositUsd: 1000, bins: [], fees24h: 100 });
+    expect(perDay).toBeCloseTo(100, 6);
+  });
+  test("deep existing liquidity shrinks the share", () => {
+    const deep = estimateEarnings({ ...base, depositUsd: 1000, bins: [{ bin: active, liquidity: 10n ** 24n }], fees24h: 100 });
+    const thin = estimateEarnings({ ...base, depositUsd: 1000, bins: pool, fees24h: 100 });
+    expect(deep.perDay).toBeLessThan(thin.perDay);
+    expect(deep.apr).toBeCloseTo((deep.perDay * 365 * 100) / 1000, 6);
+  });
+  test("Curve earns more than Bid-Ask at the center", () => {
+    const at = (strategy: 1 | 2) => estimateEarnings({ ...base, strategy, depositUsd: 1000, bins: pool, fees24h: 100 }).perDay;
+    expect(at(1)).toBeGreaterThan(at(2));
+  });
+});
+
+describe("successorBin mirrors the contract", () => {
+  test("price above the range lands directly below it", () => {
+    expect(successorBin(0, 8, 20)).toBe(12);
+  });
+  test("price below the range lands directly above it", () => {
+    expect(successorBin(0, 8, -5)).toBe(-4);
+  });
+  test("in range has no successor", () => {
+    expect(successorBin(0, 8, 3)).toBeNull();
+  });
+});
+
+describe("capitalEfficiency", () => {
+  test("narrower is more efficient", () => {
+    expect(capitalEfficiency(8)).toBeGreaterThan(capitalEfficiency(32));
+  });
+  test("matches the known formula for 16 bins", () => {
+    expect(capitalEfficiency(16)).toBeCloseTo(250.5, 0);
+  });
+});
+
+describe("shapeCurve", () => {
+  test("Spot is flat, Curve peaks mid, Bid-Ask peaks at the edges", () => {
+    expect(shapeCurve(0, 0.2)).toBe(1);
+    expect(shapeCurve(1, 0.5)).toBe(1);
+    expect(shapeCurve(1, 0)).toBe(0);
+    expect(shapeCurve(2, 0.5)).toBe(0);
+    expect(shapeCurve(2, 1)).toBe(1);
   });
 });

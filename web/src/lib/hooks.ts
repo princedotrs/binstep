@@ -5,10 +5,13 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import { useAccount, useConfig, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { CHAIN_ID } from "./addresses";
+import { poolLiquidity } from "./math";
 import { readPool, type PoolState } from "./read";
 import { getStatus, readClient, subscribeStatus } from "./route";
+import { aprOf, type MarketStats } from "./stats";
 
 const POLL_MS = 15_000;
+const STATS_POLL_MS = 60_000;
 
 export function useAnonStatus() {
   return useSyncExternalStore(subscribeStatus, getStatus, getStatus);
@@ -19,9 +22,35 @@ export function usePool() {
   return useQuery<PoolState>({
     queryKey: ["pool", address ?? "none"],
     queryFn: () => readPool(readClient, address),
+    // Keeps the page and the user's draft on screen while a newly connected wallet loads.
+    placeholderData: (previous) => previous,
     refetchInterval: POLL_MS,
     retry: false,
   });
+}
+
+export function liquidityUsd(pool: PoolState) {
+  const { weth, usdc } = poolLiquidity(pool.bins, pool.tick, pool.wethIsToken0);
+  return weth * pool.usd + usdc;
+}
+
+export type MarketSummary = MarketStats & { apr: number };
+
+/** Waits for the pool so APR has a liquidity figure to divide by. */
+export function useStats(pool: PoolState | undefined) {
+  const query = useQuery<MarketStats>({
+    queryKey: ["stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/stats");
+      if (!res.ok) throw new Error("Stats are unavailable");
+      return res.json();
+    },
+    refetchInterval: STATS_POLL_MS,
+    retry: 1,
+  });
+  const data: MarketSummary | undefined =
+    query.data && pool ? { ...query.data, apr: aprOf(query.data.fees, liquidityUsd(pool)) } : undefined;
+  return { data, isError: query.isError };
 }
 
 type Call = Parameters<ReturnType<typeof useWriteContract>["writeContractAsync"]>[0];

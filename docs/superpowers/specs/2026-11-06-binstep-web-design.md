@@ -61,3 +61,23 @@ Range states:
 
 ## Left to the builder
 Exact layout and visual details, within the rule that bins are the page's centerpiece.
+
+## Redesign (Nebula)
+From the user, after reviewing clickable prototypes:
+- The homepage lists markets with liquidity, 24h volume, fees and APR. A row or Deposit
+  opens the pool, and Swap opens it on the swap tab.
+- Nebula colors. Calm emphasis: auto-compound and auto-rebalance stay easy to see without
+  gradients or badges.
+- Range is set by dragging on the chart, or with a Chart / Manual switch for typed prices.
+- New liquidity sits brighter on top of existing liquidity. The strategy outline is a
+  faint watermark.
+- Curve and Bid-Ask are drawn as parabolas in the UI only. The contract stays linear, so
+  bars use the real weights. A real parabola was rejected: it moves each bin by a few
+  percentage points and would mean replacing the live pool.
+
+My calls:
+- The second token auto-fills at the ratio BinDistribution spends.
+- "What if the price moves?" and the rebalance preview follow `successorLowerBin`.
+- Earnings are this deposit's share of the active bin times the last 24 hours of fees.
+- `/api/stats` scans logs on the server because the public RPC serves 200 blocks per
+  eth_getLogs. It sees no wallet, so it does not weaken private reads.

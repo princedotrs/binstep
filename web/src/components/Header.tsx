@@ -17,7 +17,7 @@ function WalletButton() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const button = "rounded-md border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted";
+  const button = "rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted";
   if (!mounted) return <span className={button}>Connect wallet</span>;
 
   if (!address) {
@@ -57,9 +57,9 @@ export function Header() {
   return (
     <>
       <header className="border-b border-line">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
           <Link href="/" className="font-mono text-base font-semibold tracking-tight">
-            bin<span className="text-weth">step</span>
+            bin<span className="brand-text">step</span>
           </Link>
           <nav className="flex items-center gap-4">
             {link("/", "Markets", path === "/" || path === "/pool")}

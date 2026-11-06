@@ -41,6 +41,13 @@ cre workflow simulate automation --target base-sepolia -e base-sepolia.env \
 ./scripts/move-price.sh 2200                     # swap the test pool to a USD price
 ```
 
+The workflow is not deployed to the CRE network yet, because this account's deploy access
+is not enabled. Until it is, nothing acts on positions unless this timer is running:
+
+```bash
+./scripts/run-automation.sh        # broadcasts every 5 minutes while this machine is on
+```
+
 The test pool only moves when someone swaps, so `move-price.sh` stands in for
 arbitrage. Stay within 3% of the live price, or the workflow refuses to act.
 

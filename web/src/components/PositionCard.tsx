@@ -9,7 +9,7 @@ import { automationCall, closeCall, compoundCall, rebalanceCall } from "@/lib/tx
 import { Panel, Toggle } from "./ui";
 
 const STATE: Record<RangeState, { label: string; tone: string; detail: string }> = {
-  earning: { label: "Earning", tone: "text-usdc", detail: "The price is inside this range." },
+  earning: { label: "Earning", tone: "text-good", detail: "The price is inside this range." },
   pending: {
     label: "Rebalance pending",
     tone: "text-warn",

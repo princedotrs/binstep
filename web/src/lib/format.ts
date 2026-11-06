@@ -6,6 +6,8 @@ export const usd = (value: number) =>
 export const price = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+export const percent = (value: number) => `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)}%`;
+
 export function token(amount: bigint, decimals: number, places = 4) {
   const value = Number(formatUnits(amount, decimals));
   if (value > 0 && value < 10 ** -places) return `<${10 ** -places}`;

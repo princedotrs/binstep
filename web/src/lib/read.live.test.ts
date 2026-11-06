@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createPublicClient, type PublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
+import { scanStats } from "./stats";
 import { readPool } from "./read";
 import { tickToUsd } from "./math";
 
@@ -25,3 +26,11 @@ test("reads without a wallet", async () => {
   expect(state.wallet).toBeNull();
   expect(state.positions.length).toBeGreaterThanOrEqual(5);
 });
+
+test("scans a day of swap stats", async () => {
+  const start = Date.now();
+  const stats = await scanStats(client);
+  console.log(`scanned in ${Date.now() - start}ms:`, stats);
+  expect(stats.volume).toBeGreaterThanOrEqual(0);
+  if (stats.swaps > 0) expect(stats.fees).toBeGreaterThan(0);
+}, 90_000);

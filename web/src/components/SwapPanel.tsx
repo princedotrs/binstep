@@ -9,7 +9,7 @@ import type { PoolState } from "@/lib/read";
 import { approveCall, swapCall } from "@/lib/tx";
 import { parseAmount, swapBlocker } from "@/lib/validate";
 import { formatUnits } from "viem";
-import { AmountField, Panel, Primary } from "./ui";
+import { AmountField, Primary } from "./ui";
 
 export function SwapPanel({ pool }: { pool: PoolState }) {
   const { address } = useAccount();
@@ -38,8 +38,8 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
   };
 
   return (
-    <Panel title="Swap">
-      <div className="mb-3 grid grid-cols-2 gap-1 rounded-md bg-ink p-1 text-sm">
+    <div>
+      <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-ink p-1 text-sm">
         {(["weth", "usdc"] as const).map((side) => (
           <button
             key={side}
@@ -54,7 +54,9 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
         ))}
       </div>
       <AmountField
-        label="Amount"
+        label="You sell"
+        token={sell === "weth" ? "tWETH" : "tUSDC"}
+        dot={sell === "weth" ? "bg-weth" : "bg-usdc"}
         value={amount}
         onChange={setAmount}
         balance={wallet ? token(balance, decimals) : undefined}
@@ -74,6 +76,6 @@ export function SwapPanel({ pool }: { pool: PoolState }) {
       </Primary>
       {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
 
-    </Panel>
+    </div>
   );
 }

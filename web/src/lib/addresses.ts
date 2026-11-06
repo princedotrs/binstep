@@ -23,6 +23,7 @@ export const addresses = {
 };
 
 export const POOL_ID = deployment.poolId as Hex;
+export const POOL_MANAGER = deployment.poolManager as Address;
 export const WETH_IS_TOKEN0 = deployment.wethIsToken0;
 
 export const poolKey = {
