@@ -11,7 +11,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
-import { BASE_SEPOLIA_RPC, addresses } from "@/lib/addresses";
+import { RPC_URL, addresses } from "@/lib/addresses";
 import { AIRDROP_USDC, AIRDROP_WETH, decideAirdrop, type AirdropKind } from "@/lib/airdrop";
 
 const MULTICALL3: Address = "0xcA11bde05977b3631167028862bE2a173976CA11";
@@ -30,7 +30,7 @@ let queue: Promise<unknown> = Promise.resolve();
 
 const reply = (status: number, body: object) => Response.json(body, { status });
 
-const pub = createPublicClient({ chain: baseSepolia, transport: http(BASE_SEPOLIA_RPC) });
+const pub = createPublicClient({ chain: baseSepolia, transport: http(RPC_URL) });
 
 async function readWallet(to: Address) {
   const balance = (address: Address) =>
@@ -45,7 +45,7 @@ async function readWallet(to: Address) {
 
 /** One atomic transaction, so a user never gets tokens without the gas to use them. */
 async function send(key: Hex, to: Address, gas: bigint) {
-  const wallet = createWalletClient({ account: privateKeyToAccount(key), chain: baseSepolia, transport: http(BASE_SEPOLIA_RPC) });
+  const wallet = createWalletClient({ account: privateKeyToAccount(key), chain: baseSepolia, transport: http(RPC_URL) });
   const mint = (target: Address, amount: bigint) => ({
     target,
     allowFailure: false,

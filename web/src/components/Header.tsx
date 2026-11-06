@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { CHAIN_ID } from "@/lib/addresses";
+import { CHAIN_ID, DEVNET } from "@/lib/addresses";
 import { shortAddress } from "@/lib/format";
 import { AirdropButton } from "./Airdrop";
 import { PrivacyBadge, PrivacyBanner } from "./Privacy";
@@ -20,6 +20,24 @@ function WalletButton() {
   const button = "rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted";
   if (!mounted) return <span className={button}>Connect wallet</span>;
 
+  if (!address && DEVNET) {
+    const dev = connectors.find((connector) => connector.type === "mock");
+    const own = connectors.find((connector) => connector.type === "injected");
+    return (
+      <>
+        {own && (
+          <button className={button} disabled={isPending} onClick={() => connect({ connector: own })}>
+            Use my wallet
+          </button>
+        )}
+        {dev && (
+          <button className={button} disabled={isPending} onClick={() => connect({ connector: dev })}>
+            Connect dev wallet
+          </button>
+        )}
+      </>
+    );
+  }
   if (!address) {
     const wallet = connectors[0];
     return (

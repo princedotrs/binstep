@@ -1,5 +1,12 @@
 import type { Address, Hex } from "viem";
-import deployment from "./deployment.json";
+import liveDeployment from "./deployment.json";
+
+type Deployment = typeof liveDeployment & { deployBlock?: number };
+
+/** Set by scripts/devnet.sh. The app runs against Base Sepolia when these are absent. */
+const deployment: Deployment = process.env.NEXT_PUBLIC_DEPLOYMENT
+  ? JSON.parse(process.env.NEXT_PUBLIC_DEPLOYMENT)
+  : liveDeployment;
 
 export const CHAIN_ID = 84532;
 export const TICK_SPACING = 10;
@@ -11,7 +18,11 @@ export const WETH_DECIMALS = 18;
 export const USDC_DECIMALS = 6;
 
 export const STATE_VIEW: Address = "0x571291b572ed32ce6751a2cb2486ebee8defb9b4";
-export const BASE_SEPOLIA_RPC = "https://sepolia.base.org";
+export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://sepolia.base.org";
+export const DEVNET = Boolean(process.env.NEXT_PUBLIC_RPC_URL);
+
+/** Anvil's third public test account. Anvil signs for it, so the app holds no key. */
+export const DEV_WALLET: Address = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
 
 export const addresses = {
   manager: deployment.manager as Address,
@@ -22,6 +33,8 @@ export const addresses = {
   swapRouter: deployment.swapRouter as Address,
 };
 
+/** Log scans start here on a devnet, because older blocks live on the upstream RPC. */
+export const FIRST_BLOCK = BigInt(deployment.deployBlock ?? 0);
 export const POOL_ID = deployment.poolId as Hex;
 export const POOL_MANAGER = deployment.poolManager as Address;
 export const WETH_IS_TOKEN0 = deployment.wethIsToken0;

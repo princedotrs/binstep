@@ -3,12 +3,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
+import { addresses } from "@/lib/addresses";
 import type { AirdropKind } from "@/lib/airdrop";
 
 const AMOUNTS = "10 tWETH and 25,000 tUSDC";
 const NOTE_MS = 6_000;
 
-const flagKey = (address: string) => `binstep:airdrop:${address.toLowerCase()}`;
+/** Per deployment, so a fresh devnet gives a wallet its first airdrop again. */
+const flagKey = (address: string) => `binstep:airdrop:${addresses.weth}:${address.toLowerCase()}`;
 
 function alreadyDropped(address: string) {
   try {

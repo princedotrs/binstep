@@ -3,5 +3,6 @@ contracts/cache/
 contracts/broadcast/
 .env
 node_modules/
+.devnet/
 contracts/deployments/*.json
 !contracts/deployments/base-sepolia.json

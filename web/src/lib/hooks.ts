@@ -1,32 +1,51 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { useAccount, useConfig, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
-import { CHAIN_ID } from "./addresses";
+import { CHAIN_ID, DEVNET } from "./addresses";
 import { poolLiquidity } from "./math";
-import { readPool, type PoolState } from "./read";
+import { decodePool, readWallet, type PoolState } from "./read";
 import { getStatus, readClient, subscribeStatus } from "./route";
 import { aprOf, type MarketStats } from "./stats";
 
-const POLL_MS = 15_000;
-const STATS_POLL_MS = 60_000;
+const POLL_MS = DEVNET ? 3_000 : 15_000;
+const STATS_POLL_MS = DEVNET ? 5_000 : 60_000;
+const STATS_RETRY_MS = 10_000;
 
 export function useAnonStatus() {
   return useSyncExternalStore(subscribeStatus, getStatus, getStatus);
 }
 
+/**
+ * Market data is public and carries no wallet, so the app's server reads it. Only reads that
+ * name the user's wallet use the anon route, so a failed route never blanks the market.
+ */
 export function usePool() {
   const { address } = useAccount();
-  return useQuery<PoolState>({
-    queryKey: ["pool", address ?? "none"],
-    queryFn: () => readPool(readClient, address),
-    // Keeps the page and the user's draft on screen while a newly connected wallet loads.
-    placeholderData: (previous) => previous,
+  const market = useQuery<PoolState>({
+    queryKey: ["pool", "market"],
+    queryFn: async () => {
+      const res = await fetch("/api/pool");
+      if (!res.ok) throw new Error("Pool data is unavailable");
+      return decodePool(await res.text());
+    },
+    refetchInterval: POLL_MS,
+    retry: 1,
+  });
+  const wallet = useQuery({
+    queryKey: ["pool", "wallet", address],
+    queryFn: () => readWallet(readClient, address!),
+    enabled: Boolean(address),
     refetchInterval: POLL_MS,
     retry: false,
   });
+  const data = useMemo(
+    () => market.data && { ...market.data, wallet: address ? (wallet.data ?? null) : null },
+    [market.data, wallet.data, address],
+  );
+  return { data, isError: market.isError };
 }
 
 export function liquidityUsd(pool: PoolState) {
@@ -45,7 +64,7 @@ export function useStats(pool: PoolState | undefined) {
       if (!res.ok) throw new Error("Stats are unavailable");
       return res.json();
     },
-    refetchInterval: STATS_POLL_MS,
+    refetchInterval: (query) => (query.state.status === "error" ? STATS_RETRY_MS : STATS_POLL_MS),
     retry: 1,
   });
   const data: MarketSummary | undefined =
@@ -75,6 +94,7 @@ export function useTransactions() {
           const hash = await writeContractAsync(call as Call);
           await waitForTransactionReceipt(config, { hash, chainId: CHAIN_ID });
         }
+        await fetch("/api/pool?fresh=1").catch(() => {});
         await queryClient.invalidateQueries({ queryKey: ["pool"] });
       } catch (e) {
         const message = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message;

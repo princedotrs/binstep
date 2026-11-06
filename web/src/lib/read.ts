@@ -51,6 +51,19 @@ export type PoolState = {
 const manager = { address: addresses.manager, abi: managerAbi } as const;
 const hook = { address: addresses.hook, abi: hookAbi } as const;
 
+const BIGINT_KEY = "$bigint";
+
+/** JSON has no bigint, and these values overflow a number. */
+export function encodePool(pool: PoolState) {
+  return JSON.stringify(pool, (_, value) => (typeof value === "bigint" ? { [BIGINT_KEY]: value.toString() } : value));
+}
+
+export function decodePool(json: string): PoolState {
+  return JSON.parse(json, (_, value) =>
+    typeof value === "object" && value !== null && BIGINT_KEY in value ? BigInt(value[BIGINT_KEY]) : value,
+  );
+}
+
 function aggregateBins(positions: Position[]) {
   const totals = new Map<number, bigint>();
   for (const p of positions) {
@@ -62,7 +75,7 @@ function aggregateBins(positions: Position[]) {
   return [...totals].map(([bin, liquidity]) => ({ bin, liquidity })).sort((a, b) => a.bin - b.bin);
 }
 
-async function readWallet(client: PublicClient, wallet: Address): Promise<WalletState> {
+export async function readWallet(client: PublicClient, wallet: Address): Promise<WalletState> {
   const token = (address: Address, functionName: "balanceOf" | "allowance", args: readonly Address[]) =>
     ({ address, abi: erc20Abi, functionName, args }) as never;
   const { weth, usdc, manager: m, swapRouter: r } = addresses;

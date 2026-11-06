@@ -22,9 +22,13 @@ Run `npm run sync-abi` after redeploying contracts.
 
 ## Private reads
 
-Every app read goes through Anon-RPC, tried in this order: Nox, then Nym. Only one
-worker runs at a time. If both fail, reads stop and the user chooses between trying
-again and a plain RPC. Nothing falls back on its own.
+Reads that name the user's wallet go through Anon-RPC, tried in this order: Nox, then
+Nym. Only one worker runs at a time. If both fail, those reads stop and the user chooses
+between trying again and a plain RPC. Nothing falls back on its own.
+
+Market data names no wallet, so `/api/pool` and `/api/stats` read it on the server and it
+loads whatever happens to the route. The workers need https or `localhost`. On plain http,
+such as a LAN address, the route fails at once and the market still works.
 
 The first read usually takes under a minute. These networks are young, so
 connecting can sometimes take a few minutes.
@@ -43,6 +47,14 @@ The header button sends more, until a wallet holds ten airdrops of both tokens.
 `/api/airdrop` signs with `AIRDROP_PRIVATE_KEY`, in `.env.local`. Use a dedicated
 wallet holding only test ETH. It needs no rights on any contract, because the test
 tokens can be minted by anyone. See `.env.example`.
+
+## Local devnet
+
+`../scripts/devnet.sh up` runs everything on this machine: a fork of Base Sepolia, fresh
+contracts, this app on port 3001, and the automation workflow every 30 seconds. The top of
+that script lists the commands that earn fees, move the price and fast-forward time.
+
+The mixnet cannot reach `localhost`, so devnet reads use the local RPC directly.
 
 ## Deploying to Vercel
 

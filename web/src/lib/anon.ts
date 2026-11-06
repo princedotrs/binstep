@@ -106,6 +106,10 @@ export function createAnonRoute({ makeWorker, plainFetch, onStatus, probeTimeout
 
   return {
     fetch: routedFetch,
+    /** Opens the route ahead of the first read, so the badge reflects it. */
+    connect() {
+      if (!plain && !failed) connect().catch(() => {});
+    },
     retry() {
       failed = false;
       plain = false;

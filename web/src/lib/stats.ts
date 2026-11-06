@@ -1,5 +1,5 @@
 import { parseAbiItem, type PublicClient } from "viem";
-import { POOL_ID, POOL_MANAGER, WETH_IS_TOKEN0 } from "./addresses";
+import { FIRST_BLOCK, POOL_ID, POOL_MANAGER, WETH_IS_TOKEN0 } from "./addresses";
 
 /** Base Sepolia makes a block every 2 seconds. */
 const BLOCKS_PER_DAY = 43_200n;
@@ -40,7 +40,8 @@ export function blockChunks(from: bigint, to: bigint, size: bigint): [bigint, bi
 /** Runs on the server: about 216 reads is too heavy to send through a mixnet per visitor. */
 export async function scanStats(client: PublicClient): Promise<MarketStats> {
   const toBlock = await client.getBlockNumber();
-  const queue = blockChunks(toBlock - BLOCKS_PER_DAY, toBlock, LOG_RANGE);
+  const dayAgo = toBlock - BLOCKS_PER_DAY;
+  const queue = blockChunks(dayAgo > FIRST_BLOCK ? dayAgo : FIRST_BLOCK, toBlock, LOG_RANGE);
   const swaps: { amountUsdc: bigint; fee: number }[] = [];
 
   const worker = async () => {

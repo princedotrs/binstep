@@ -1,23 +1,17 @@
-import { createPublicClient, http, type PublicClient } from "viem";
-import { baseSepolia } from "viem/chains";
-import { BASE_SEPOLIA_RPC } from "@/lib/addresses";
+import { DEVNET } from "@/lib/addresses";
+import { serverClient } from "@/lib/server-rpc";
 import { scanStats, type MarketStats } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
-const FRESH_MS = 5 * 60_000;
-const CACHE_HEADER = "public, s-maxage=300, stale-while-revalidate=3600";
-
-const client = createPublicClient({
-  chain: baseSepolia,
-  transport: http(BASE_SEPOLIA_RPC, { retryCount: 3 }),
-}) as unknown as PublicClient;
+const FRESH_MS = DEVNET ? 3_000 : 5 * 60_000;
+const CACHE_HEADER = DEVNET ? "no-store" : "public, s-maxage=300, stale-while-revalidate=3600";
 
 let cached: { at: number; stats: MarketStats } | null = null;
 let scanning: Promise<MarketStats> | null = null;
 
 function refresh() {
-  scanning ??= scanStats(client)
+  scanning ??= scanStats(serverClient)
     .then((stats) => {
       cached = { at: Date.now(), stats };
       return stats;
