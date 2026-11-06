@@ -29,12 +29,13 @@ My calls:
   because parallel workers failed in testing. tor-js is excluded: its demo gateway
   failed every run.
 - Reads are batched through Multicall3 to keep anonymized traffic small.
+- A dropped call retries on the same worker twice before switching workers.
 - Polling every 15s once connected. Reads pause while the tab is hidden.
 - A swap uses the deployed `PoolSwapTest` router, and a position uses `BinStepManager`.
 - A mint or manage call takes a tick guard of +/-100 ticks around the price read.
 
 ## Exclusions from Anon-RPC, stated in the UI and submission
-- Wallet transactions and wallet-side reads use the wallet's own RPC.
+- Wallet transactions, their receipts and wallet-side reads use the wallet's own RPC.
 - One bootstrap read of the worker's specifier contract uses a public RPC.
 
 ## Screens

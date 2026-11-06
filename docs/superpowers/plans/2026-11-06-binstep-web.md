@@ -1,6 +1,6 @@
 # BinStep Web Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** A browser app for the live Base Sepolia pool with Anon-RPC default reads.
 
@@ -27,42 +27,42 @@
 
 ### Task 1: Scaffold, addresses, ABIs
 **Files:** `web/package.json`, `web/next.config.ts`, `web/tsconfig.json`, `web/src/lib/addresses.ts`, `web/src/lib/abi.ts`, `web/scripts/sync-abi.py`
-- [ ] Generate `abi.ts` from `contracts/out` with `sync-abi.py`.
-- [ ] `addresses.ts` exports `deployment`, `poolKey`, and `TICK_SPACING`.
-- [ ] `bun x tsc --noEmit` passes. Commit.
+- [x] Generate `abi.ts` from `contracts/out` with `sync-abi.py`.
+- [x] `addresses.ts` exports `deployment`, `poolKey`, and `TICK_SPACING`.
+- [x] `bun x tsc --noEmit` passes. Commit.
 
 ### Task 2: Pool math
 **Files:** `web/src/lib/math.ts`, `math.test.ts`
 **Produces:** `tickToUsd(tick)`, `usdToTick(usd)`, `binOf(tick)`, `binToUsd(bin)`, `strategyWeights(strategy, n)`, `previewShape(strategy, lowerBin, n, activeBin)`, `rangeState(position)`.
-- [ ] Tests: weights match `StrategyLib` for n=1, 2, 5, 16 on all strategies; a price round trip within one tick; `binOf(-199223)` is -19923; range states match the spec.
-- [ ] Implement, run, commit.
+- [x] Tests: weights match `StrategyLib` for n=1, 2, 5, 16 on all strategies; a price round trip within one tick; `binOf(-199223)` is -19923; range states match the spec.
+- [x] Implement, run, commit.
 
 ### Task 3: Anon transport
 **Files:** `web/src/lib/anon.ts`, `anon.test.ts`
 **Produces:** `createAnonRoute({ makeWorker, onStatus })` returning `{ fetch, status, retry, usePlainRpc }`; statuses `connecting`, `private`, `failed`, `plain`.
-- [ ] Tests with a fake worker: Nox tried first; Nym after Nox fails; never two at once; `failed` after both and no plain request is sent; `plain` only after `usePlainRpc`.
-- [ ] Implement, run, commit.
+- [x] Tests with a fake worker: Nox tried first; Nym after Nox fails; never two at once; `failed` after both and no plain request is sent; `plain` only after `usePlainRpc`.
+- [x] Implement, run, commit.
 
 ### Task 4: Chain reads
 **Files:** `web/src/lib/read.ts`, `read.live.test.ts`
 **Produces:** `readPool(client, wallet?)` returning price, fee, positions, bins, balances, allowances in one multicall round.
-- [ ] Live test against `sepolia.base.org` decodes real data: 5 positions, pool price near the tick, liquidity per bin.
-- [ ] Implement, run, commit.
+- [x] Live test against `sepolia.base.org` decodes real data: 5 positions, pool price near the tick, liquidity per bin.
+- [x] Implement, run, commit.
 
 ### Task 5: Transaction builders
 **Files:** `web/src/lib/tx.ts`, `tx.live.test.ts`
 **Produces:** `mintCall`, `swapCall`, `compoundCall`, `rebalanceCall`, `closeCall`, `automationCall`, `faucetCalls`, `approveCall`.
-- [ ] Live test simulates mint and swap from the deployer through `eth_call`, plus zero-amount and wrong-owner failures.
-- [ ] Implement, run, commit.
+- [x] Live test simulates mint and swap from the deployer through `eth_call`, plus zero-amount and wrong-owner failures.
+- [x] Implement, run, commit.
 
 ### Task 6: App
 **Files:** `web/src/app/*`, `web/src/components/*`
-- [ ] Providers, privacy badge with consent dialog, wallet button with chain switch.
-- [ ] Pool page: stats, bin chart, swap, faucet, create position.
-- [ ] Positions page with range state copy and actions.
-- [ ] Commit each screen.
+- [x] Providers, privacy badge with consent dialog, wallet button with chain switch.
+- [x] Pool page: stats, bin chart, swap, faucet, create position.
+- [x] Positions page with range state copy and actions.
+- [x] Commit each screen.
 
 ### Task 7: Verify
-- [ ] `bun test`, typecheck, `next build`.
-- [ ] Headless Chrome screenshots at desktop and phone width.
-- [ ] Real page load reads the pool through a mixnet. Record the result. Commit.
+- [x] `bun test`, typecheck, `next build`.
+- [x] Headless Chrome screenshots at desktop and phone width.
+- [x] Real page load reads the pool through a mixnet. Record the result. Commit.
