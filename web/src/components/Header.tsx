@@ -3,41 +3,31 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { erc20Abi } from "viem";
-import { useAccount, useBalance, useConnect, useDisconnect, useReadContract, useSwitchChain, type Connector } from "wagmi";
-import { CHAIN_ID, DEVNET, USDC_DECIMALS, addresses } from "@/lib/addresses";
+import { useAccount, useConnect, useDisconnect, useSwitchChain, type Connector } from "wagmi";
+import { CHAIN_ID, DEVNET, USDC_DECIMALS } from "@/lib/addresses";
 import { shortAddress, token } from "@/lib/format";
+import { useWalletBalances } from "@/lib/hooks";
 import { FirstAirdrop, useAirdrop } from "./Airdrop";
 import { PrivacyBadge, PrivacyBanner } from "./Privacy";
 
-const button = "rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted";
+const button = "rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted pointer-coarse:min-h-11";
 
 /** Wallets the browser announced. The generic connector is only for browsers announcing none. */
 function listWallets(connectors: readonly Connector[]) {
   const announced = connectors.filter((connector) => connector.id !== "injected");
-  const wallets = announced.length ? announced : connectors;
+  const generic = typeof window !== "undefined" && "ethereum" in window ? connectors : [];
+  const wallets = announced.length ? announced : generic;
   return wallets.filter((wallet, index) => wallets.findIndex(({ id }) => id === wallet.id) === index);
 }
 
-const BALANCE_POLL_MS = 15_000;
-
-/** Balances come from the wallet's own RPC, so this tells no one new about the address. */
 function WalletMenu({ address }: { address: `0x${string}` }) {
   const { disconnect } = useDisconnect();
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const { drop, busy, note } = useAirdrop(null);
-  const query = { enabled: open, refetchInterval: BALANCE_POLL_MS };
-  const eth = useBalance({ address, chainId: CHAIN_ID, query });
-  const usdc = useReadContract({
-    address: addresses.usdc,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: [address],
-    chainId: CHAIN_ID,
-    query,
-  });
-  const balance = (value: string | null, failed: boolean) => value ?? (failed ? "Unavailable" : "…");
+  const { data: balances, isError } = useWalletBalances(address, open);
+  const balance = (value: bigint | undefined, decimals: number, places?: number) =>
+    value === undefined ? (isError ? "Unavailable" : "…") : token(value, decimals, places);
 
   useEffect(() => {
     if (!open) return;
@@ -66,19 +56,17 @@ function WalletMenu({ address }: { address: `0x${string}` }) {
           <dl className="mt-1.5 space-y-1 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-muted">ETH</dt>
-              <dd className="font-mono">{balance(eth.data ? token(eth.data.value, 18) : null, eth.isError)}</dd>
+              <dd className="font-mono">{balance(balances?.eth, 18)}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">tUSDC</dt>
-              <dd className="font-mono">
-                {balance(usdc.data === undefined ? null : token(usdc.data, USDC_DECIMALS, 2), usdc.isError)}
-              </dd>
+              <dd className="font-mono">{balance(balances?.usdc, USDC_DECIMALS, 2)}</dd>
             </div>
           </dl>
           <button
             className={`${button} mt-3 w-full disabled:text-muted`}
             disabled={busy}
-            onClick={() => drop(address, "usdc").then(() => usdc.refetch())}
+            onClick={() => drop(address, "usdc")}
           >
             {busy ? "Sending…" : "Airdrop tUSDC"}
           </button>
@@ -105,22 +93,27 @@ function WalletPicker() {
 
   return (
     <div className="relative" onKeyDown={(event) => event.key === "Escape" && close()}>
-      <button className={button} disabled={!wallets.length} aria-expanded={open} onClick={() => setOpen(!open)}>
-        {wallets.length ? "Connect wallet" : "No wallet found"}
+      <button className={button} aria-expanded={open} onClick={() => setOpen(!open)}>
+        Connect wallet
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
           <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-lg border border-line bg-panel p-1 shadow-lg">
+            {!wallets.length && (
+              <p className="px-2 py-1.5 text-xs leading-relaxed text-muted">
+                No wallet found. On a phone, open this site in your wallet app&apos;s browser. On a computer, install a wallet extension.
+              </p>
+            )}
             {wallets.map((wallet) => (
               <button
                 key={wallet.id}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-raised disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-raised disabled:opacity-50 pointer-coarse:py-3"
                 disabled={isPending}
                 onClick={() => connect({ connector: wallet }, { onSuccess: close })}
               >
                 {wallet.icon && <img src={wallet.icon} alt="" className="size-5 rounded" />}
-                {wallet.name}
+                {wallet.id === "injected" ? "Browser wallet" : wallet.name}
               </button>
             ))}
             {error && <p className="px-2 py-1 text-xs text-bad">{firstLine(error)}</p>}
@@ -180,33 +173,66 @@ function WalletButton() {
   return <WalletMenu address={address} />;
 }
 
+/** Three bins stepping up, in the chart's colors. */
+const BinMark = () => (
+  <span className="flex h-4 items-end gap-0.5" aria-hidden>
+    <i className="block h-2 w-1 bg-usdc" />
+    <i className="block h-3 w-1 bg-now" />
+    <i className="block h-4 w-1 bg-asset" />
+  </span>
+);
+
+const NAV = [
+  { href: "/", label: "Markets", match: (path: string) => path === "/" || path.startsWith("/pool") },
+  { href: "/swap", label: "Swap", match: (path: string) => path.startsWith("/swap") },
+  { href: "/create", label: "Create pool", match: (path: string) => path === "/create" },
+  { href: "/positions", label: "Positions", match: (path: string) => path === "/positions" },
+];
+
 export function Header() {
   const path = usePathname();
-  const link = (href: string, label: string, active = path === href) => (
-    <Link href={href} className={`text-sm ${active ? "text-text" : "text-muted hover:text-text"}`}>
-      {label}
-    </Link>
-  );
   return (
     <>
       <header className="border-b border-line">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
-          <Link href="/" className="font-mono text-base font-semibold tracking-tight">
-            bin<span className="brand-text">step</span>
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5 sm:py-0">
+          <Link href="/" className="flex items-center gap-2 font-mono text-base font-semibold tracking-tight">
+            <BinMark />
+            binstep
           </Link>
-          <nav className="flex items-center gap-4">
-            {link("/", "Markets", path === "/" || path.startsWith("/pool"))}
-            {link("/swap", "Swap", path.startsWith("/swap"))}
-            {link("/create", "Create pool")}
-            {link("/positions", "Positions")}
+          <nav className="hidden items-center gap-5 self-stretch sm:flex" aria-label="Main">
+            {NAV.map(({ href, label, match }) => (
+              <Link
+                key={href}
+                href={href}
+                aria-current={match(path) ? "page" : undefined}
+                className={`-mb-px border-b-2 py-4 text-sm ${match(path) ? "border-text text-text" : "border-transparent text-muted hover:text-text"}`}
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:py-2.5">
             <PrivacyBadge />
             <FirstAirdrop />
             <WalletButton />
           </div>
         </div>
       </header>
+      <nav
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-panel pb-[env(safe-area-inset-bottom)] sm:hidden"
+      >
+        {NAV.map(({ href, label, match }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={match(path) ? "page" : undefined}
+            className={`-mt-px border-t-2 py-3.5 text-center text-xs font-medium ${match(path) ? "border-text text-text" : "border-transparent text-muted"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
       <PrivacyBanner />
     </>
   );

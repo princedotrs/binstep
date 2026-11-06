@@ -88,7 +88,7 @@ function Workspace({ pool }: { pool: PoolState }) {
   const mode = (on: boolean, label: string, value: boolean) => (
     <button
       type="button"
-      className={`rounded-md px-3 py-1 text-xs ${on ? "bg-raised text-text" : "text-muted"}`}
+      className={`rounded-md px-3 py-1 text-xs pointer-coarse:py-2 ${on ? "bg-raised text-text" : "text-muted"}`}
       onClick={() => setManual(value)}
     >
       {label}

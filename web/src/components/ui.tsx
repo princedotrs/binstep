@@ -5,7 +5,7 @@ import { COMMUNITY, type Market } from "@/lib/markets";
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-xl border border-line bg-panel p-4 ${className}`}>
+    <section className={`rounded-xl border border-line bg-panel p-3.5 sm:p-4 ${className}`}>
       {title && <h2 className="mb-3 text-sm font-semibold">{title}</h2>}
       {children}
     </section>
@@ -41,13 +41,13 @@ export function AmountField(props: {
         <label htmlFor={id}>{props.label}</label>
         <span className="flex items-center gap-2 font-mono">
           {props.balance !== undefined && props.onHalf && (
-            <button type="button" className="hover:text-text" disabled={props.disabled} onClick={props.onHalf}>
+            <button type="button" className="hover:text-text pointer-coarse:px-1.5 pointer-coarse:py-1" disabled={props.disabled} onClick={props.onHalf}>
               50%
             </button>
           )}
           {props.balance !== undefined &&
             (props.onMax ? (
-              <button type="button" className="hover:text-text" disabled={props.disabled} onClick={props.onMax}>
+              <button type="button" className="hover:text-text pointer-coarse:px-1.5 pointer-coarse:py-1" disabled={props.disabled} onClick={props.onMax}>
                 Max {props.balance}
               </button>
             ) : (

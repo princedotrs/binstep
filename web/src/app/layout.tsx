@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { Header } from "@/components/Header";
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   description: "Spot, Curve and Bid-Ask liquidity bins on Uniswap v4, with private reads.",
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0a0b18",
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
@@ -23,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Header />
           <TxNotice />
           <main className="mx-auto w-full max-w-7xl px-4 py-6">{children}</main>
-          <footer className="mx-auto w-full max-w-7xl px-4 pb-8 text-xs leading-relaxed text-muted">
+          <footer className="mx-auto w-full max-w-7xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-xs leading-relaxed text-muted sm:pb-8">
             {DEVNET ? (
               "Local devnet: a private fork of Base Sepolia on this machine. Reads go straight to it, with no mixnet."
             ) : (

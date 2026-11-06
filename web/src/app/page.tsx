@@ -2,7 +2,6 @@
 
 import { HeroWave } from "@/components/HeroWave";
 import { MarketTable } from "@/components/MarketTable";
-import { AimIcon, LoopIcon } from "@/components/ui";
 import { usd } from "@/lib/format";
 import { liquidityUsd, useAllStats, usePools } from "@/lib/hooks";
 
@@ -27,27 +26,20 @@ export default function MarketsPage() {
     <div>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div className="min-w-72 flex-1">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Shape your liquidity.</h1>
-          <p className="mt-2 max-w-md leading-relaxed text-muted">
-            Pick a market, then draw exactly where your capital sits with Spot, Curve or Bid-Ask.
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Liquidity in bins, on Uniswap v4</h1>
+          <p className="mt-2 max-w-lg leading-relaxed text-muted">
+            Place your capital across 0.10% bins as Spot, Curve or Bid-Ask. Turn on automation and a keeper compounds your
+            fees and moves a range that drifts out.
           </p>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span className="flex items-center gap-1.5">
-              <span className="text-accent"><LoopIcon size={15} /></span> Auto-compound
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="text-accent"><AimIcon size={15} /></span> Auto-rebalance
-            </span>
-          </div>
         </div>
         <HeroWave />
       </div>
 
-      <dl className="my-5 flex flex-wrap gap-x-9 gap-y-3 border-t border-line pt-4">
+      <dl className="my-5 grid grid-cols-3 gap-x-3 border-t border-line pt-4 sm:flex sm:gap-x-9">
         {totals.map(([label, value]) => (
           <div key={label}>
             <dt className="text-xs text-muted">{label}</dt>
-            <dd className="font-mono text-xl font-medium">{value}</dd>
+            <dd className="font-mono text-sm font-medium min-[380px]:text-base sm:text-xl">{value}</dd>
           </div>
         ))}
       </dl>

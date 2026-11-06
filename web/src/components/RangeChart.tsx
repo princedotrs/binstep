@@ -219,13 +219,13 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
         />
 
         {[
-          { edge: left, offset: lo, label: "Minimum price", side: close ? "-translate-x-full" : "-translate-x-1/2" },
-          { edge: right, offset: hi + 1, label: "Maximum price", side: close ? "" : "-translate-x-1/2" },
-        ].map(({ edge, offset, side }) => (
+          { edge: left, offset: lo, label: "Minimum price", end: "low", side: close ? "-translate-x-full" : "-translate-x-full sm:-translate-x-1/2" },
+          { edge: right, offset: hi + 1, label: "Maximum price", end: "high", side: close ? "" : "sm:-translate-x-1/2" },
+        ].map(({ edge, offset, end, side }) => (
           <span
             key={offset}
-            className={`pointer-events-none absolute top-2 z-4 rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11.5px] font-medium whitespace-nowrap ${side}`}
-            style={{ left: `${clamp(edge, 5, 95)}%` }}
+            className={`chart-tag ${end} pointer-events-none absolute top-2 z-4 rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11.5px] font-medium whitespace-nowrap ${side}`}
+            style={{ "--x": `${clamp(edge, 5, 95)}%` } as React.CSSProperties}
           >
             {price(edgeUsd(activeBin, offset, pair))}
           </span>
@@ -279,7 +279,7 @@ export function RangeChart({ pool, strategy, range, onRange, scrub, onScrub, dep
           <span key={offset} className={i % 2 ? "hidden sm:inline" : ""}>{price(edgeUsd(activeBin, offset, pair))}</span>
         ))}
       </div>
-      <p className="mt-1 text-xs text-faint">Your bars are enlarged so they stay visible. Hover a bin for exact amounts.</p>
+      <p className="mt-1 text-xs text-faint">Your bars are enlarged so they stay visible.<span className="pointer-coarse:hidden"> Hover a bin for exact amounts.</span></p>
 
       <div className="mt-3 grid items-center gap-x-3 gap-y-1 rounded-lg bg-raised px-3 py-2.5 text-sm sm:grid-cols-[auto_1fr_auto]">
         <label htmlFor="whatif">What if the price moves?</label>
