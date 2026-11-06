@@ -1,5 +1,6 @@
 import { parseAbiItem, type PublicClient } from "viem";
-import { FIRST_BLOCK, POOL_ID, POOL_MANAGER, WETH_IS_TOKEN0 } from "./addresses";
+import { FIRST_BLOCK, POOL_MANAGER } from "./addresses";
+import { readMarkets } from "./read";
 
 /** Base Sepolia makes a block every 2 seconds. */
 const BLOCKS_PER_DAY = 43_200n;
@@ -38,26 +39,29 @@ export function blockChunks(from: bigint, to: bigint, size: bigint): [bigint, bi
 }
 
 /** Runs on the server: about 216 reads is too heavy to send through a mixnet per visitor. */
-export async function scanStats(client: PublicClient): Promise<MarketStats> {
-  const toBlock = await client.getBlockNumber();
+export async function scanStats(client: PublicClient): Promise<Record<string, MarketStats>> {
+  const [toBlock, markets] = await Promise.all([client.getBlockNumber(), readMarkets(client)]);
   const dayAgo = toBlock - BLOCKS_PER_DAY;
   const queue = blockChunks(dayAgo > FIRST_BLOCK ? dayAgo : FIRST_BLOCK, toBlock, LOG_RANGE);
-  const swaps: { amountUsdc: bigint; fee: number }[] = [];
+  const swaps = new Map<string, { amountUsdc: bigint; fee: number }[]>();
 
   const worker = async () => {
     for (let chunk = queue.shift(); chunk; chunk = queue.shift()) {
       const logs = await client.getLogs({
         address: POOL_MANAGER,
         event: swapEvent,
-        args: { id: POOL_ID },
+        args: { id: markets.map((market) => market.poolId) },
         fromBlock: chunk[0],
         toBlock: chunk[1],
       });
       for (const { args } of logs) {
-        swaps.push({ amountUsdc: (WETH_IS_TOKEN0 ? args.amount1 : args.amount0) ?? 0n, fee: args.fee ?? 0 });
+        const market = markets.find(({ poolId }) => poolId === args.id);
+        if (!market) continue;
+        const amountUsdc = (market.baseIsToken0 ? args.amount1 : args.amount0) ?? 0n;
+        swaps.set(market.id, [...(swaps.get(market.id) ?? []), { amountUsdc, fee: args.fee ?? 0 }]);
       }
     }
   };
   await Promise.all(Array.from({ length: CONCURRENT_READS }, worker));
-  return summarizeSwaps(swaps);
+  return Object.fromEntries(markets.map(({ id }) => [id, summarizeSwaps(swaps.get(id) ?? [])]));
 }

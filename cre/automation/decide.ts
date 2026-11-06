@@ -3,18 +3,24 @@
  * without a chain or a network.
  *
  * The contracts still enforce every safety rule. This only decides what is worth
- * paying gas for, and refuses to act on a pool whose price disagrees with the
- * market.
+ * paying gas for, and refuses to act on a pool whose price disagrees with a market
+ * feed. Most test tokens have no feed, so only the contracts' checks cover them.
  */
 
 export const ActionKind = { Compound: 0, Rebalance: 1 } as const;
 
 export type Action = { kind: number; positionId: bigint };
 
+/** Every pool pairs its token with tUSDC. */
+export type Pool = {
+  poolId: string;
+  baseIsToken0: boolean;
+  baseDecimals: number;
+  /** The token's price from a feed, or null when it has none. */
+  marketUsd: number | null;
+};
+
 export type Rules = {
-  wethIsToken0: boolean;
-  token0Decimals: number;
-  token1Decimals: number;
   maxPriceDeviationBps: number;
   minCompoundUsd: number;
   minDistanceBins: number;
@@ -24,6 +30,7 @@ export type Rules = {
 
 export type PositionView = {
   positionId: bigint;
+  poolId: string;
   lowerBin: number;
   numBins: number;
   autoCompound: boolean;
@@ -41,25 +48,29 @@ export type PositionView = {
 
 export type Skipped = { positionId: bigint; reason: string };
 
+/** How far a pool sits from its feed. Pools with no feed have no check. */
+export type PriceCheck = { poolId: string; poolPriceUsd: number; marketUsd: number; deviationBps: number };
+
 export type Decision = {
-  poolPriceUsd: number | null;
-  deviationBps: number | null;
+  checks: PriceCheck[];
   actions: Action[];
   skipped: Skipped[];
 };
 
 const TICK_BASE = 1.0001;
+const USDC_DECIMALS = 6;
 
-/** Pool price of one WETH in USDC, from a tick and the two tokens' decimals. */
-export function poolEthPriceUsd(tick: number, rules: Rules): number {
-  const token1PerToken0 = TICK_BASE ** tick * 10 ** (rules.token0Decimals - rules.token1Decimals);
-  return rules.wethIsToken0 ? token1PerToken0 : 1 / token1PerToken0;
+/** Pool price of the token in tUSDC, from a tick. */
+export function poolPriceUsd(tick: number, pool: Pool): number {
+  const decimals0 = pool.baseIsToken0 ? pool.baseDecimals : USDC_DECIMALS;
+  const decimals1 = pool.baseIsToken0 ? USDC_DECIMALS : pool.baseDecimals;
+  const token1PerToken0 = TICK_BASE ** tick * 10 ** (decimals0 - decimals1);
+  return pool.baseIsToken0 ? token1PerToken0 : 1 / token1PerToken0;
 }
 
-function amountUsd(amount0: bigint, amount1: bigint, ethUsd: number, rules: Rules): number {
-  const human0 = Number(amount0) / 10 ** rules.token0Decimals;
-  const human1 = Number(amount1) / 10 ** rules.token1Decimals;
-  return rules.wethIsToken0 ? human0 * ethUsd + human1 : human0 + human1 * ethUsd;
+function amountUsd(amount0: bigint, amount1: bigint, priceUsd: number, pool: Pool): number {
+  const [base, usdc] = pool.baseIsToken0 ? [amount0, amount1] : [amount1, amount0];
+  return (Number(base) / 10 ** pool.baseDecimals) * priceUsd + Number(usdc) / 10 ** USDC_DECIMALS;
 }
 
 function deviationBps(poolPrice: number, marketPrice: number): number {
@@ -77,25 +88,36 @@ function rebalanceSkipReason(p: PositionView, nowSeconds: number, rules: Rules):
 
 export function decide(
   positions: readonly PositionView[],
-  marketEthUsd: number,
+  pools: readonly Pool[],
   nowSeconds: number,
   rules: Rules,
 ): Decision {
-  if (!Number.isFinite(marketEthUsd) || marketEthUsd <= 0) throw new Error("invalid market price");
+  for (const { marketUsd } of pools) {
+    if (marketUsd !== null && !(Number.isFinite(marketUsd) && marketUsd > 0)) throw new Error("invalid market price");
+  }
+  const poolById = new Map(pools.map((pool) => [pool.poolId.toLowerCase(), pool]));
 
   const candidates: Candidate[] = [];
   const skipped: Skipped[] = [];
-  let poolPriceUsd: number | null = null;
-  let deviation: number | null = null;
+  const checks = new Map<string, PriceCheck>();
 
   for (const p of positions) {
     const skip = (reason: string) => skipped.push({ positionId: p.positionId, reason });
 
-    poolPriceUsd = poolEthPriceUsd(p.liveTick, rules);
-    deviation = deviationBps(poolPriceUsd, marketEthUsd);
-    if (deviation > rules.maxPriceDeviationBps) {
-      skip("pool disagrees with market");
+    const pool = poolById.get(p.poolId.toLowerCase());
+    if (!pool) {
+      skip("pool not listed");
       continue;
+    }
+
+    const livePrice = poolPriceUsd(p.liveTick, pool);
+    if (pool.marketUsd !== null) {
+      const deviation = deviationBps(livePrice, pool.marketUsd);
+      checks.set(pool.poolId, { poolId: pool.poolId, poolPriceUsd: livePrice, marketUsd: pool.marketUsd, deviationBps: deviation });
+      if (deviation > rules.maxPriceDeviationBps) {
+        skip("pool disagrees with market");
+        continue;
+      }
     }
 
     if (!p.inRange) {
@@ -113,7 +135,7 @@ export function decide(
       skip("compound not enabled");
       continue;
     }
-    const valueUsd = amountUsd(p.pending0 + p.idle0, p.pending1 + p.idle1, marketEthUsd, rules);
+    const valueUsd = amountUsd(p.pending0 + p.idle0, p.pending1 + p.idle1, pool.marketUsd ?? livePrice, pool);
     if (valueUsd < rules.minCompoundUsd) skip("fees below threshold");
     else candidates.push({ kind: ActionKind.Compound, positionId: p.positionId, priority: 0, valueUsd });
   }
@@ -124,8 +146,7 @@ export function decide(
   }
 
   return {
-    poolPriceUsd,
-    deviationBps: deviation,
+    checks: [...checks.values()],
     actions: candidates.slice(0, rules.maxActions).map(({ kind, positionId }) => ({ kind, positionId })),
     skipped,
   };

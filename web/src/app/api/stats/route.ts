@@ -7,8 +7,10 @@ export const dynamic = "force-dynamic";
 const FRESH_MS = DEVNET ? 3_000 : 5 * 60_000;
 const CACHE_HEADER = DEVNET ? "no-store" : "public, s-maxage=300, stale-while-revalidate=3600";
 
-let cached: { at: number; stats: MarketStats } | null = null;
-let scanning: Promise<MarketStats> | null = null;
+type AllStats = Record<string, MarketStats>;
+
+let cached: { at: number; stats: AllStats } | null = null;
+let scanning: Promise<AllStats> | null = null;
 
 function refresh() {
   scanning ??= scanStats(serverClient)

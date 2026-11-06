@@ -1,19 +1,23 @@
 import { TICK_SPACING } from "./addresses";
 
-/** tUSDC per tWETH in base units differs from USD by the decimals gap, 10^12. */
-const DECIMALS_GAP = 1e12;
 const TICK_BASE = 1.0001;
+
+/** How a market's two tokens sit in the pool. tUSDC is the quote token, with 6 decimals. */
+export type Pair = { baseIsToken0: boolean; baseDecimals: number };
+
+/** tUSDC per base token in base units differs from USD by this. */
+const decimalsGap = (pair: Pair) => 10 ** (pair.baseDecimals - 6);
 
 export type Strategy = 0 | 1 | 2;
 export const STRATEGY_NAMES = ["Spot", "Curve", "Bid-Ask"] as const;
 
-export function tickToUsd(tick: number, wethIsToken0: boolean): number {
+export function tickToUsd(tick: number, pair: Pair): number {
   const raw = TICK_BASE ** tick;
-  return wethIsToken0 ? raw * DECIMALS_GAP : DECIMALS_GAP / raw;
+  return pair.baseIsToken0 ? raw * decimalsGap(pair) : decimalsGap(pair) / raw;
 }
 
-export function usdToTick(usd: number, wethIsToken0: boolean): number {
-  const raw = wethIsToken0 ? usd / DECIMALS_GAP : DECIMALS_GAP / usd;
+export function usdToTick(usd: number, pair: Pair): number {
+  const raw = pair.baseIsToken0 ? usd / decimalsGap(pair) : decimalsGap(pair) / usd;
   return Math.round(Math.log(raw) / Math.log(TICK_BASE));
 }
 
@@ -21,12 +25,12 @@ export function binOf(tick: number): number {
   return Math.floor(tick / TICK_SPACING);
 }
 
-export function binToUsd(bin: number, wethIsToken0: boolean): number {
-  return tickToUsd(bin * TICK_SPACING, wethIsToken0);
+export function binToUsd(bin: number, pair: Pair): number {
+  return tickToUsd(bin * TICK_SPACING, pair);
 }
 
 /** Token amounts behind bin liquidity, using the standard v4 range formulas. */
-export function poolLiquidity(bins: { bin: number; liquidity: bigint }[], tick: number, wethIsToken0: boolean) {
+export function poolLiquidity(bins: { bin: number; liquidity: bigint }[], tick: number, pair: Pair) {
   const sqrtAt = (t: number) => TICK_BASE ** (t / 2);
   const now = sqrtAt(tick);
   let raw0 = 0;
@@ -38,7 +42,8 @@ export function poolLiquidity(bins: { bin: number; liquidity: bigint }[], tick: 
     raw0 += Number(liquidity) * (1 / inner - 1 / upper);
     raw1 += Number(liquidity) * (inner - lower);
   }
-  return wethIsToken0 ? { weth: raw0 / 1e18, usdc: raw1 / 1e6 } : { weth: raw1 / 1e18, usdc: raw0 / 1e6 };
+  const unit = 10 ** pair.baseDecimals;
+  return pair.baseIsToken0 ? { base: raw0 / unit, usdc: raw1 / 1e6 } : { base: raw1 / unit, usdc: raw0 / 1e6 };
 }
 
 /** Mirrors StrategyLib.weights in the contracts. */
@@ -50,16 +55,16 @@ export function strategyWeights(strategy: Strategy, n: number): number[] {
   });
 }
 
-export type ShapeBin = { bin: number; weight: number; holds: "weth" | "usdc" | "both" };
+export type ShapeBin = { bin: number; weight: number; holds: "base" | "usdc" | "both" };
 
 export function previewShape(
   strategy: Strategy,
   lowerBin: number,
   n: number,
   activeBin: number,
-  wethIsToken0: boolean,
+  pair: Pair,
 ): ShapeBin[] {
-  const [above, below]: ShapeBin["holds"][] = wethIsToken0 ? ["weth", "usdc"] : ["usdc", "weth"];
+  const [above, below]: ShapeBin["holds"][] = pair.baseIsToken0 ? ["base", "usdc"] : ["usdc", "base"];
   return strategyWeights(strategy, n).map((weight, i) => {
     const bin = lowerBin + i;
     const holds = bin === activeBin ? "both" : bin > activeBin ? above : below;
@@ -77,12 +82,12 @@ export function shapeCurve(strategy: Strategy, u: number): number {
 const LIQUIDITY_UNIT = 10n ** 18n;
 
 /** Token amounts one unit of k would cost, as in BinDistribution's cost0 and cost1. */
-export function depositSplit(strategy: Strategy, lowerBin: number, n: number, tick: number, wethIsToken0: boolean) {
+export function depositSplit(strategy: Strategy, lowerBin: number, n: number, tick: number, pair: Pair) {
   const bins = strategyWeights(strategy, n).map((weight, i) => ({
     bin: lowerBin + i,
     liquidity: BigInt(weight) * LIQUIDITY_UNIT,
   }));
-  return poolLiquidity(bins, tick, wethIsToken0);
+  return poolLiquidity(bins, tick, pair);
 }
 
 /** Share of the last day's fees this deposit would have taken while the price sat in activeBin. */
@@ -93,15 +98,15 @@ export function estimateEarnings(p: {
   tick: number;
   activeBin: number;
   usdPrice: number;
-  wethIsToken0: boolean;
+  pair: Pair;
   depositUsd: number;
   bins: { bin: number; liquidity: bigint }[];
   fees24h: number;
 }) {
   const index = p.activeBin - p.lowerBin;
   if (p.depositUsd <= 0 || index < 0 || index >= p.numBins) return { perDay: 0, apr: 0 };
-  const unit = depositSplit(p.strategy, p.lowerBin, p.numBins, p.tick, p.wethIsToken0);
-  const k = p.depositUsd / (unit.weth * p.usdPrice + unit.usdc);
+  const unit = depositSplit(p.strategy, p.lowerBin, p.numBins, p.tick, p.pair);
+  const k = p.depositUsd / (unit.base * p.usdPrice + unit.usdc);
   const mine = k * strategyWeights(p.strategy, p.numBins)[index] * Number(LIQUIDITY_UNIT);
   const existing = Number(p.bins.find((b) => b.bin === p.activeBin)?.liquidity ?? 0n);
   const perDay = (p.fees24h * mine) / (mine + existing);

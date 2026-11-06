@@ -15,23 +15,26 @@ import {
   usdToTick,
 } from "./math";
 
+const WETH_FIRST = { baseIsToken0: true, baseDecimals: 18 };
+const WETH_SECOND = { baseIsToken0: false, baseDecimals: 18 };
+
 describe("prices", () => {
   test("a live tick reads as the real price", () => {
-    expect(tickToUsd(-199223, true)).toBeCloseTo(2230, -1);
+    expect(tickToUsd(-199223, WETH_FIRST)).toBeCloseTo(2230, -1);
   });
 
   test("inverts when USDC is token0", () => {
-    const tick = usdToTick(2230, false);
+    const tick = usdToTick(2230, WETH_SECOND);
     expect(tick).toBeGreaterThan(0);
-    expect(tickToUsd(tick, false)).toBeCloseTo(2230, -1);
+    expect(tickToUsd(tick, WETH_SECOND)).toBeCloseTo(2230, -1);
   });
 
   test("a price round trips within one tick", () => {
-    expect(Math.abs(usdToTick(tickToUsd(-199223, true), true) + 199223)).toBeLessThanOrEqual(1);
+    expect(Math.abs(usdToTick(tickToUsd(-199223, WETH_FIRST), WETH_FIRST) + 199223)).toBeLessThanOrEqual(1);
   });
 
   test("a bin price is its lower edge", () => {
-    expect(binToUsd(-19923, true)).toBeCloseTo(tickToUsd(-199230, true), 6);
+    expect(binToUsd(-19923, WETH_FIRST)).toBeCloseTo(tickToUsd(-199230, WETH_FIRST), 6);
   });
 });
 
@@ -72,17 +75,17 @@ describe("strategyWeights matches StrategyLib", () => {
 
 describe("previewShape", () => {
   test("splits tokens around the active bin", () => {
-    const bins = previewShape(0, 10, 5, 12, true);
-    expect(bins.map((b) => b.holds)).toEqual(["usdc", "usdc", "both", "weth", "weth"]);
+    const bins = previewShape(0, 10, 5, 12, WETH_FIRST);
+    expect(bins.map((b) => b.holds)).toEqual(["usdc", "usdc", "both", "base", "base"]);
   });
   test("a range above the price holds only WETH", () => {
-    expect(previewShape(1, 20, 3, 12, true).every((b) => b.holds === "weth")).toBe(true);
+    expect(previewShape(1, 20, 3, 12, WETH_FIRST).every((b) => b.holds === "base")).toBe(true);
   });
   test("a range below the price holds only USDC", () => {
-    expect(previewShape(2, 0, 3, 12, true).every((b) => b.holds === "usdc")).toBe(true);
+    expect(previewShape(2, 0, 3, 12, WETH_FIRST).every((b) => b.holds === "usdc")).toBe(true);
   });
   test("flips sides when USDC is token0", () => {
-    expect(previewShape(0, 10, 3, 11, false).map((b) => b.holds)).toEqual(["weth", "both", "usdc"]);
+    expect(previewShape(0, 10, 3, 11, WETH_SECOND).map((b) => b.holds)).toEqual(["base", "both", "usdc"]);
   });
 });
 
@@ -109,55 +112,55 @@ describe("poolLiquidity", () => {
   const near = (a: number, b: number) => expect(Math.abs(a - b) / b).toBeLessThan(1e-6);
 
   test("a bin above the price holds only token0", () => {
-    const { weth, usdc } = poolLiquidity([{ bin: 5, liquidity: L }], 0, true);
+    const { base, usdc } = poolLiquidity([{ bin: 5, liquidity: L }], 0, WETH_FIRST);
     expect(usdc).toBe(0);
-    near(weth, (Number(L) * (1 - 1 / (1 + WIDTH)) / 1.0001 ** 25) / 1e18);
+    near(base, (Number(L) * (1 - 1 / (1 + WIDTH)) / 1.0001 ** 25) / 1e18);
   });
 
   test("a bin below the price holds only token1", () => {
-    const { weth, usdc } = poolLiquidity([{ bin: -6, liquidity: L }], 0, true);
-    expect(weth).toBe(0);
+    const { base, usdc } = poolLiquidity([{ bin: -6, liquidity: L }], 0, WETH_FIRST);
+    expect(base).toBe(0);
     near(usdc, (Number(L) * WIDTH * 1.0001 ** -30) / 1e6);
   });
 
   test("the active bin splits at the price", () => {
-    const { weth, usdc } = poolLiquidity([{ bin: 0, liquidity: L }], 5, true);
-    expect(weth).toBeGreaterThan(0);
+    const { base, usdc } = poolLiquidity([{ bin: 0, liquidity: L }], 5, WETH_FIRST);
+    expect(base).toBeGreaterThan(0);
     expect(usdc).toBeGreaterThan(0);
   });
 
   test("swaps the token names when WETH is token1", () => {
-    const flipped = poolLiquidity([{ bin: 5, liquidity: L }], 0, false);
-    expect(flipped.weth).toBe(0);
+    const flipped = poolLiquidity([{ bin: 5, liquidity: L }], 0, WETH_SECOND);
+    expect(flipped.base).toBe(0);
     expect(flipped.usdc).toBeGreaterThan(0);
   });
 
   test("an empty pool is zero", () => {
-    expect(poolLiquidity([], 0, true)).toEqual({ weth: 0, usdc: 0 });
+    expect(poolLiquidity([], 0, WETH_FIRST)).toEqual({ base: 0, usdc: 0 });
   });
 });
 
 describe("depositSplit", () => {
   test("a range above the price needs only WETH", () => {
-    const split = depositSplit(1, 5, 8, 0, true);
+    const split = depositSplit(1, 5, 8, 0, WETH_FIRST);
     expect(split.usdc).toBe(0);
-    expect(split.weth).toBeGreaterThan(0);
+    expect(split.base).toBeGreaterThan(0);
   });
   test("a range below the price needs only USDC", () => {
-    const split = depositSplit(1, -20, 8, 0, true);
-    expect(split.weth).toBe(0);
+    const split = depositSplit(1, -20, 8, 0, WETH_FIRST);
+    expect(split.base).toBe(0);
   });
   test("a centered Spot range values both sides about evenly", () => {
-    const tick = usdToTick(2200, true);
-    const { weth, usdc } = depositSplit(0, binOf(tick) - 8, 17, tick, true);
-    expect(Math.abs((weth * 2200) / usdc - 1)).toBeLessThan(0.15);
+    const tick = usdToTick(2200, WETH_FIRST);
+    const { base, usdc } = depositSplit(0, binOf(tick) - 8, 17, tick, WETH_FIRST);
+    expect(Math.abs((base * 2200) / usdc - 1)).toBeLessThan(0.15);
   });
 });
 
 describe("estimateEarnings", () => {
-  const tick = usdToTick(2200, true);
+  const tick = usdToTick(2200, WETH_FIRST);
   const active = binOf(tick);
-  const base = { strategy: 0 as const, lowerBin: active - 4, numBins: 8, tick, activeBin: active, usdPrice: 2200, wethIsToken0: true };
+  const base = { strategy: 0 as const, lowerBin: active - 4, numBins: 8, tick, activeBin: active, usdPrice: 2200, pair: WETH_FIRST };
   const pool = [{ bin: active, liquidity: 10n ** 18n }];
   test("no deposit earns nothing", () => {
     expect(estimateEarnings({ ...base, depositUsd: 0, bins: pool, fees24h: 100 })).toEqual({ perDay: 0, apr: 0 });
@@ -210,5 +213,23 @@ describe("shapeCurve", () => {
     expect(shapeCurve(1, 0)).toBe(0);
     expect(shapeCurve(2, 0.5)).toBe(0);
     expect(shapeCurve(2, 1)).toBe(1);
+  });
+});
+
+describe("tokens with other decimals", () => {
+  const WBTC = { baseIsToken0: true, baseDecimals: 8 };
+  const WBTC_SECOND = { baseIsToken0: false, baseDecimals: 8 };
+
+  test("a price survives the round trip in either token order", () => {
+    expect(tickToUsd(usdToTick(75_926, WBTC), WBTC) / 75_926).toBeCloseTo(1, 3);
+    expect(tickToUsd(usdToTick(75_926, WBTC_SECOND), WBTC_SECOND) / 75_926).toBeCloseTo(1, 3);
+  });
+  test("the same tick prices an 8 decimal token 10^10 below an 18 decimal one", () => {
+    expect((tickToUsd(0, WETH_FIRST) / tickToUsd(0, WBTC)) / 1e10).toBeCloseTo(1, 6);
+  });
+  test("liquidity amounts use the token's own decimals", () => {
+    const bins = [{ bin: 5, liquidity: 10n ** 18n }];
+    const eighteen = poolLiquidity(bins, 0, WETH_FIRST).base;
+    expect(poolLiquidity(bins, 0, WBTC).base / eighteen / 1e10).toBeCloseTo(1, 6);
   });
 });

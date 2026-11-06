@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { DepositPanel, type Draft } from "@/components/DepositPanel";
-import { Loading } from "@/components/Loading";
-import { ManualRange } from "@/components/ManualRange";
-import { RangeChart } from "@/components/RangeChart";
-import { SwapPanel } from "@/components/SwapPanel";
-import { PairIcon, Panel, Stat } from "@/components/ui";
+import { useMemo, useState } from "react";
+import { AirdropButton } from "./Airdrop";
+import { DepositPanel, type Draft } from "./DepositPanel";
+import { Loading } from "./Loading";
+import { ManualRange } from "./ManualRange";
+import { RangeChart } from "./RangeChart";
+import { PairIcon, Panel, Stat, UnverifiedNote } from "./ui";
 import { feePercent, percent, price, usd } from "@/lib/format";
 import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
+import type { Market } from "@/lib/markets";
 import { depositSplit, estimateEarnings, type Strategy } from "@/lib/math";
 import { binAtOffset, lowerBinOf, type Range } from "@/lib/range";
 import type { PoolState } from "@/lib/read";
@@ -19,50 +20,46 @@ const trim = (value: number, decimals: number) => (value > 0 ? String(Number(val
 
 function Workspace({ pool }: { pool: PoolState }) {
   const { data: stats } = useStats(pool);
-  const [tab, setTab] = useState<"deposit" | "swap">("deposit");
   const [strategy, setStrategy] = useState<Strategy>(1);
   const [range, setRange] = useState<Range>({ lo: -8, hi: 7 });
   const [scrub, setScrub] = useState(0);
   const [manual, setManual] = useState(false);
-  const [anchor, setAnchor] = useState<{ side: "weth" | "usdc"; text: string }>({ side: "weth", text: "" });
+  const [anchor, setAnchor] = useState<{ side: "base" | "usdc"; text: string }>({ side: "base", text: "" });
+  const { market } = pool;
   const [autoCompound, setAutoCompound] = useState(true);
   const [autoRebalance, setAutoRebalance] = useState(true);
 
-  useEffect(() => {
-    if (new URLSearchParams(location.search).get("tab") === "swap") setTab("swap");
-  }, []);
-
-  const { activeBin, tick, wethIsToken0: flip } = pool;
+  const { activeBin, tick, market: pair } = pool;
   const numBins = range.hi - range.lo + 1;
-  const lowerBin = lowerBinOf(activeBin, range, flip);
-  const sides = mintSides(lowerBin, numBins, activeBin, flip);
+  const lowerBin = lowerBinOf(activeBin, range, pair);
+  const sides = mintSides(lowerBin, numBins, activeBin, pair);
 
   /** The other token follows the one the user typed, at the ratio the contract spends. */
   const amounts = useMemo(() => {
-    const split = depositSplit(strategy, lowerBin, numBins, tick, flip);
+    const split = depositSplit(strategy, lowerBin, numBins, tick, pair);
     const typed = Number(anchor.text) || 0;
-    const usdValue = anchor.side === "weth" ? typed * pool.usd : typed;
-    if (!sides.weth) return { weth: "", usdc: anchor.side === "usdc" ? anchor.text : trim(usdValue, 2), wethUsd: 0, usdcUsd: usdValue };
-    if (!sides.usdc) return { usdc: "", weth: anchor.side === "weth" ? anchor.text : trim(usdValue / pool.usd, 6), wethUsd: usdValue, usdcUsd: 0 };
-    const weth = anchor.side === "weth" ? typed : (typed * split.weth) / split.usdc;
-    const usdc = anchor.side === "usdc" ? typed : (typed * split.usdc) / split.weth;
+    const usdValue = anchor.side === "base" ? typed * pool.usd : typed;
+    if (!sides.base) return { base: "", usdc: anchor.side === "usdc" ? anchor.text : trim(usdValue, 2), baseUsd: 0, usdcUsd: usdValue };
+    if (!sides.usdc) return { usdc: "", base: anchor.side === "base" ? anchor.text : trim(usdValue / pool.usd, 6), baseUsd: usdValue, usdcUsd: 0 };
+    const base = anchor.side === "base" ? typed : (typed * split.base) / split.usdc;
+    const usdc = anchor.side === "usdc" ? typed : (typed * split.usdc) / split.base;
     return {
-      weth: anchor.side === "weth" ? anchor.text : trim(weth, 6),
+      base: anchor.side === "base" ? anchor.text : trim(base, 6),
       usdc: anchor.side === "usdc" ? anchor.text : trim(usdc, 2),
-      wethUsd: weth * pool.usd,
+      baseUsd: base * pool.usd,
       usdcUsd: usdc,
     };
-  }, [anchor, strategy, lowerBin, numBins, tick, flip, sides.weth, sides.usdc, pool.usd]);
+  }, [anchor, strategy, lowerBin, numBins, tick, pair, sides.base, sides.usdc, pool.usd]);
 
-  const depositUsd = amounts.wethUsd + amounts.usdcUsd;
+  const depositUsd = amounts.baseUsd + amounts.usdcUsd;
   const earnings = estimateEarnings({
     strategy,
     lowerBin,
     numBins,
     tick,
-    activeBin: binAtOffset(activeBin, scrub, flip),
+    activeBin: binAtOffset(activeBin, scrub, pair),
     usdPrice: pool.usd,
-    wethIsToken0: flip,
+    pair,
     depositUsd,
     bins: pool.bins,
     fees24h: stats?.fees ?? 0,
@@ -74,12 +71,12 @@ function Workspace({ pool }: { pool: PoolState }) {
     lowerBin,
     numBins,
     sides,
-    weth: amounts.weth,
+    base: amounts.base,
     usdc: amounts.usdc,
-    onWeth: (text) => setAnchor({ side: "weth", text }),
+    onBase: (text) => setAnchor({ side: "base", text }),
     onUsdc: (text) => setAnchor({ side: "usdc", text }),
-    onReset: () => setAnchor({ side: "weth", text: "" }),
-    wethUsd: amounts.wethUsd,
+    onReset: () => setAnchor({ side: "base", text: "" }),
+    baseUsd: amounts.baseUsd,
     usdcUsd: amounts.usdcUsd,
     earnings,
     autoCompound,
@@ -88,14 +85,6 @@ function Workspace({ pool }: { pool: PoolState }) {
     onAutoRebalance: setAutoRebalance,
   };
 
-  const tabButton = (id: typeof tab, label: string) => (
-    <button
-      className={`-mb-px border-b-2 pb-2.5 font-medium ${tab === id ? "border-accent text-text" : "border-transparent text-muted"}`}
-      onClick={() => setTab(id)}
-    >
-      {label}
-    </button>
-  );
   const mode = (on: boolean, label: string, value: boolean) => (
     <button
       type="button"
@@ -108,15 +97,21 @@ function Workspace({ pool }: { pool: PoolState }) {
 
   return (
     <div className="space-y-3.5">
-      <Link href="/" className="inline-block text-sm text-muted hover:text-text">← All markets</Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/" className="text-sm text-muted hover:text-text">← All markets</Link>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AirdropButton market={market} />
+        </div>
+      </div>
 
+      <UnverifiedNote market={market} />
       <Panel className="py-3">
         <dl className="flex flex-wrap items-center gap-x-8 gap-y-2.5">
           <div className="flex items-center gap-3">
-            <PairIcon />
+            <PairIcon symbol={market.symbol} />
             <div>
-              <b className="block text-sm font-semibold">tWETH / tUSDC</b>
-              <small className="text-xs text-muted">Dynamic fee · 0.10% bins</small>
+              <b className="block text-sm font-semibold">{market.name}</b>
+              <small className="text-xs text-muted">{market.title} · Dynamic fee · {market.binWidth} bins</small>
             </div>
           </div>
           <Stat label="Price" value={price(pool.usd)} />
@@ -149,26 +144,26 @@ function Workspace({ pool }: { pool: PoolState }) {
             </div>
             {manual && (
               <div className="mt-3">
-                <ManualRange activeBin={activeBin} flip={flip} range={range} onRange={setRange} />
+                <ManualRange activeBin={activeBin} pair={pair} range={range} onRange={setRange} />
               </div>
             )}
           </div>
         </Panel>
 
         <Panel>
-          <div className="-mt-1 mb-3.5 flex gap-4.5 border-b border-line">
-            {tabButton("deposit", "Deposit")}
-            {tabButton("swap", "Swap")}
+          <div className="-mt-1 mb-3.5 flex items-center justify-between border-b border-line pb-2.5">
+            <h2 className="font-medium">Deposit</h2>
+            <Link href={market.swapHref} className="text-sm text-muted hover:text-text">Swap →</Link>
           </div>
-          {tab === "deposit" ? <DepositPanel pool={pool} stats={stats} draft={draft} /> : <SwapPanel pool={pool} />}
+          <DepositPanel pool={pool} stats={stats} draft={draft} />
         </Panel>
       </div>
     </div>
   );
 }
 
-export default function PoolPage() {
-  const { data: pool, isError } = usePool();
+export function PoolView({ market }: { market: Market }) {
+  const { data: pool, isError } = usePool(market);
   if (!pool) return <Loading error={isError} />;
   return <Workspace pool={pool} />;
 }

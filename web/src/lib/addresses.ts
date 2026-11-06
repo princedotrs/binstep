@@ -1,10 +1,18 @@
-import type { Address, Hex } from "viem";
+import type { Address } from "viem";
 import liveDeployment from "./deployment.json";
 
-type Deployment = typeof liveDeployment & { deployBlock?: number };
+export type DeployedMarket = {
+  symbol: string;
+  decimals: number;
+  token: string;
+  poolId: string;
+  baseIsToken0: boolean;
+};
+
+type Deployment = typeof liveDeployment & { deployBlock?: number; markets?: DeployedMarket[]; registry?: string };
 
 /** Set by scripts/devnet.sh. The app runs against Base Sepolia when these are absent. */
-const deployment: Deployment = process.env.NEXT_PUBLIC_DEPLOYMENT
+export const deployment: Deployment = process.env.NEXT_PUBLIC_DEPLOYMENT
   ? JSON.parse(process.env.NEXT_PUBLIC_DEPLOYMENT)
   : liveDeployment;
 
@@ -14,7 +22,6 @@ export const DYNAMIC_FEE_FLAG = 8388608;
 export const TICK_GUARD = 100;
 export const MAX_BINS = 32;
 
-export const WETH_DECIMALS = 18;
 export const USDC_DECIMALS = 6;
 
 export const STATE_VIEW: Address = "0x571291b572ed32ce6751a2cb2486ebee8defb9b4";
@@ -28,21 +35,12 @@ export const addresses = {
   manager: deployment.manager as Address,
   automation: deployment.automation as Address,
   hook: deployment.hook as Address,
-  weth: deployment.weth as Address,
   usdc: deployment.usdc as Address,
   swapRouter: deployment.swapRouter as Address,
 };
 
 /** Log scans start here on a devnet, because older blocks live on the upstream RPC. */
 export const FIRST_BLOCK = BigInt(deployment.deployBlock ?? 0);
-export const POOL_ID = deployment.poolId as Hex;
 export const POOL_MANAGER = deployment.poolManager as Address;
-export const WETH_IS_TOKEN0 = deployment.wethIsToken0;
-
-export const poolKey = {
-  currency0: deployment.token0 as Address,
-  currency1: deployment.token1 as Address,
-  fee: DYNAMIC_FEE_FLAG,
-  tickSpacing: TICK_SPACING,
-  hooks: deployment.hook as Address,
-} as const;
+/** Absent until a deployment has one, and Create pool waits for it. */
+export const REGISTRY = deployment.registry as Address | undefined;

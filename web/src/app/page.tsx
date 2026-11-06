@@ -1,50 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { HeroWave } from "@/components/HeroWave";
-import { AimIcon, LoopIcon, PairIcon } from "@/components/ui";
-import { percent, usd } from "@/lib/format";
-import { liquidityUsd, usePool, useStats } from "@/lib/hooks";
-import { MARKETS } from "@/lib/markets";
-import type { PoolState } from "@/lib/read";
-
-const HEAD = "px-4 py-3 text-right text-xs font-medium text-muted";
-const CELL = "px-4 py-3.5 text-right font-mono text-sm";
-const WIDE = "hidden md:table-cell";
-const MID = "hidden sm:table-cell";
-const SHAPE_REACH = 15;
-
-function LiquidityShape({ pool }: { pool: PoolState }) {
-  const heights = Array.from({ length: SHAPE_REACH * 2 + 1 }, (_, i) => {
-    const bin = pool.activeBin - SHAPE_REACH + i;
-    return { i, bin, liquidity: pool.bins.find((b) => b.bin === bin)?.liquidity ?? 0n };
-  });
-  const peak = heights.reduce((max, b) => (b.liquidity > max ? b.liquidity : max), 1n);
-  return (
-    <span className="inline-flex h-6.5 w-22 items-end gap-px" aria-hidden>
-      {heights.map(({ i, bin, liquidity }) => (
-        <i
-          key={i}
-          className={`min-h-px flex-1 ${bin === pool.activeBin ? "bg-now" : bin > pool.activeBin === pool.wethIsToken0 ? "bg-weth" : "bg-usdc"}`}
-          style={{ height: `${Number((liquidity * 100n) / peak)}%` }}
-        />
-      ))}
-    </span>
-  );
-}
+import { MarketTable } from "@/components/MarketTable";
+import { AimIcon, LoopIcon } from "@/components/ui";
+import { usd } from "@/lib/format";
+import { liquidityUsd, useAllStats, usePools } from "@/lib/hooks";
 
 export default function MarketsPage() {
-  const { data: pool, isError } = usePool();
-  const { data: stats, isError: statsFailed } = useStats(pool);
+  const { data: pools, isError } = usePools();
+  const { data: allStats, isError: statsFailed } = useAllStats();
 
   const wait = <span className="text-muted">{isError ? "Unavailable" : "…"}</span>;
   const waitStats = <span className="text-muted">{isError || statsFailed ? "Unavailable" : "…"}</span>;
 
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const statTotal = (field: "volume" | "fees") => sum(Object.values(allStats ?? {}).map((stats) => stats[field]));
+
   const totals = [
-    ["Total liquidity", pool ? usd(liquidityUsd(pool)) : wait],
-    ["24h volume", stats ? usd(stats.volume) : waitStats],
-    ["24h fees", stats ? usd(stats.fees) : waitStats],
+    ["Total liquidity", pools ? usd(sum(Object.values(pools).map(liquidityUsd))) : wait],
+    ["24h volume", allStats ? usd(statTotal("volume")) : waitStats],
+    ["24h fees", allStats ? usd(statTotal("fees")) : waitStats],
   ] as const;
+
 
   return (
     <div>
@@ -75,51 +52,7 @@ export default function MarketsPage() {
         ))}
       </dl>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-panel">
-        <table className="w-full border-collapse">
-          <thead className="border-b border-line">
-            <tr>
-              <th className={`${HEAD} text-left!`}>Market</th>
-              <th className={`${HEAD} ${WIDE}`}>Liquidity shape</th>
-              <th className={HEAD}>Liquidity</th>
-              <th className={`${HEAD} ${MID}`}>24h volume</th>
-              <th className={`${HEAD} ${WIDE}`}>24h fees</th>
-              <th className={HEAD}>APR</th>
-              <th className={`${HEAD} ${MID}`}><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {MARKETS.map((market) => (
-              <tr key={market.id} className="market-row relative">
-                <td className="px-4 py-3.5">
-                  <Link href={market.href} className="flex items-center gap-3 after:absolute after:inset-0">
-                    <PairIcon />
-                    <span>
-                      <b className="block text-sm font-semibold">{market.name}</b>
-                      <small className="text-xs text-muted">Dynamic fee · {market.binWidth} bins</small>
-                    </span>
-                  </Link>
-                </td>
-                <td className={`${CELL} ${WIDE}`}>{pool ? <LiquidityShape pool={pool} /> : wait}</td>
-                <td className={CELL}>{pool ? usd(liquidityUsd(pool)) : wait}</td>
-                <td className={`${CELL} ${MID}`}>{stats ? usd(stats.volume) : waitStats}</td>
-                <td className={`${CELL} ${WIDE}`}>{stats ? usd(stats.fees) : waitStats}</td>
-                <td className={`${CELL} text-good`}>{stats ? percent(stats.apr) : waitStats}</td>
-                <td className={`${CELL} ${MID}`}>
-                  <span className="relative z-10 inline-flex gap-1.5 font-sans">
-                    <Link href={`${market.href}?tab=swap`} className="rounded-lg border border-line bg-raised px-3 py-2 text-sm hover:border-muted">
-                      Swap
-                    </Link>
-                    <Link href={market.href} className="brand rounded-lg px-3.5 py-2 text-sm font-semibold hover:brightness-110">
-                      Deposit
-                    </Link>
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <MarketTable link="pool" />
     </div>
   );
 }

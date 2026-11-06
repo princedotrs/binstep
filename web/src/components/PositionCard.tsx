@@ -1,6 +1,7 @@
 "use client";
 
-import { USDC_DECIMALS, WETH_DECIMALS } from "@/lib/addresses";
+import Link from "next/link";
+import { USDC_DECIMALS } from "@/lib/addresses";
 import { price, shortAddress, token } from "@/lib/format";
 import { useTransactions } from "@/lib/hooks";
 import { STRATEGY_NAMES, binToUsd, rangeState, type RangeState } from "@/lib/math";
@@ -40,7 +41,8 @@ function MiniBars({ position, activeBin }: { position: Position; activeBin: numb
 export function PositionCard({ position: p, pool, mine }: { position: Position; pool: PoolState; mine: boolean }) {
   const { run, busy, error } = useTransactions();
   const state = STATE[rangeState(p)];
-  const [low, high] = [p.lowerBin, p.lowerBin + p.numBins].map((b) => binToUsd(b, pool.wethIsToken0)).sort((a, b) => a - b);
+  const [low, high] = [p.lowerBin, p.lowerBin + p.numBins].map((b) => binToUsd(b, pool.market)).sort((a, b) => a - b);
+  const { market } = pool;
   const canMove = !p.inRange && p.successorLowerBin !== p.lowerBin;
   const button = "rounded-md border border-line px-3 py-1.5 text-sm hover:border-muted disabled:text-muted";
 
@@ -51,6 +53,7 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
           <p className="font-medium">
             #{p.id.toString()} {STRATEGY_NAMES[p.strategy]} <span className="text-sm text-muted">{p.numBins} bins</span>
           </p>
+          <Link href={market.href} className="block text-sm text-muted hover:text-text">{market.name}</Link>
           <p className="font-mono text-sm text-muted">
             {price(low)} – {price(high)}
           </p>
@@ -64,7 +67,7 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
         <div>
           <dt className="text-xs text-muted">Unclaimed fees</dt>
           <dd className="font-mono">
-            {token(p.pendingWeth, WETH_DECIMALS)} tWETH
+            {token(p.pendingBase, market.baseDecimals)} {market.symbol}
             <br />
             {token(p.pendingUsdc, USDC_DECIMALS, 2)} tUSDC
           </dd>
@@ -72,7 +75,7 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
         <div>
           <dt className="text-xs text-muted">Idle</dt>
           <dd className="font-mono">
-            {token(p.idleWeth, WETH_DECIMALS)} tWETH
+            {token(p.idleBase, market.baseDecimals)} {market.symbol}
             <br />
             {token(p.idleUsdc, USDC_DECIMALS, 2)} tUSDC
           </dd>
@@ -81,32 +84,32 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
 
       {mine ? (
         <div className="mt-3 border-t border-line pt-3">
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">
             <Toggle
               label="Auto-compound"
               checked={p.autoCompound}
               disabled={!!busy}
-              onChange={(v) => run("Updating", [automationCall(p.id, v, p.autoRebalance)])}
+              onChange={(v) => run("Updating", [automationCall(p.id, v, p.autoRebalance)], "Automation updated")}
             />
             <Toggle
               label="Auto-rebalance"
               checked={p.autoRebalance}
               disabled={!!busy}
-              onChange={(v) => run("Updating", [automationCall(p.id, p.autoCompound, v)])}
+              onChange={(v) => run("Updating", [automationCall(p.id, p.autoCompound, v)], "Automation updated")}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className={button} disabled={!!busy} onClick={() => run("Compounding", [compoundCall(p.id, pool.tick)])}>
+          <div className="flex flex-wrap gap-2">
+            <button className={button} disabled={!!busy} onClick={() => run("Compounding", [compoundCall(p.id, pool.tick)], "Fees compounded")}>
               Compound
             </button>
             <button
               className={button}
               disabled={!!busy || !canMove}
-              onClick={() => run("Rebalancing", [rebalanceCall(p.id, p.successorLowerBin, pool.tick)])}
+              onClick={() => run("Rebalancing", [rebalanceCall(p.id, p.successorLowerBin, pool.tick)], "Position rebalanced")}
             >
               Rebalance
             </button>
-            <button className={`${button} text-bad`} disabled={!!busy} onClick={() => run("Closing", [closeCall(p.id)])}>
+            <button className={`${button} text-bad`} disabled={!!busy} onClick={() => run("Closing", [closeCall(p.id)], "Position closed")}>
               Close
             </button>
           </div>

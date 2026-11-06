@@ -2,7 +2,7 @@
 
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
-import { USDC_DECIMALS, WETH_DECIMALS, addresses } from "@/lib/addresses";
+import { USDC_DECIMALS, addresses } from "@/lib/addresses";
 import { percent, price, token } from "@/lib/format";
 import { useTransactions, type MarketSummary } from "@/lib/hooks";
 import { STRATEGY_NAMES, capitalEfficiency, shapeCurve, type Strategy } from "@/lib/math";
@@ -66,13 +66,13 @@ export type Draft = {
   onStrategy: (strategy: Strategy) => void;
   lowerBin: number;
   numBins: number;
-  sides: { weth: boolean; usdc: boolean };
-  weth: string;
+  sides: { base: boolean; usdc: boolean };
+  base: string;
   usdc: string;
-  onWeth: (text: string) => void;
+  onBase: (text: string) => void;
   onUsdc: (text: string) => void;
   onReset: () => void;
-  wethUsd: number;
+  baseUsd: number;
   usdcUsd: number;
   earnings: { perDay: number; apr: number };
   autoCompound: boolean;
@@ -84,33 +84,35 @@ export type Draft = {
 export function DepositPanel({ pool, stats, draft: d }: { pool: PoolState; stats?: MarketSummary; draft: Draft }) {
   const { address } = useAccount();
   const { run, busy, error } = useTransactions();
+  const { market } = pool;
   const wallet = pool.wallet;
 
   const blocker = !address
     ? "Connect a wallet"
-    : mintBlocker({ weth: d.weth, usdc: d.usdc, wethBalance: wallet?.weth ?? 0n, usdcBalance: wallet?.usdc ?? 0n, sides: d.sides });
+    : mintBlocker({ market, base: d.base, usdc: d.usdc, baseBalance: wallet?.base ?? 0n, usdcBalance: wallet?.usdc ?? 0n, sides: d.sides });
 
   const submit = () => {
-    const wethAmount = d.sides.weth ? parseAmount(d.weth, WETH_DECIMALS)! : 0n;
+    const baseAmount = d.sides.base ? parseAmount(d.base, market.baseDecimals)! : 0n;
     const usdcAmount = d.sides.usdc ? parseAmount(d.usdc, USDC_DECIMALS)! : 0n;
     run("Creating position", [
-      ...((wallet?.managerAllowanceWeth ?? 0n) < wethAmount ? [approveCall(addresses.weth, addresses.manager)] : []),
+      ...((wallet?.managerAllowanceBase ?? 0n) < baseAmount ? [approveCall(market.token, addresses.manager)] : []),
       ...((wallet?.managerAllowanceUsdc ?? 0n) < usdcAmount ? [approveCall(addresses.usdc, addresses.manager)] : []),
       mintCall({
+        market,
         lowerBin: d.lowerBin,
         numBins: d.numBins,
         strategy: d.strategy,
-        wethAmount,
+        baseAmount,
         usdcAmount,
         tick: pool.tick,
         autoCompound: d.autoCompound,
         autoRebalance: d.autoRebalance,
       }),
-    ]).then(d.onReset);
+    ], "Position created").then((receipt) => receipt && d.onReset());
   };
 
-  const value = d.wethUsd + d.usdcUsd;
-  const wethShare = value > 0 ? (d.wethUsd / value) * 100 : 50;
+  const value = d.baseUsd + d.usdcUsd;
+  const baseShare = value > 0 ? (d.baseUsd / value) * 100 : 50;
 
   return (
     <div>
@@ -135,14 +137,14 @@ export function DepositPanel({ pool, stats, draft: d }: { pool: PoolState; stats
       <div className="space-y-2">
         <AmountField
           label="You add"
-          token="tWETH"
-          dot="bg-weth"
-          value={d.weth}
-          onChange={d.onWeth}
-          disabled={!d.sides.weth}
-          note={d.sides.weth ? undefined : "Not needed for this range"}
-          balance={wallet ? token(wallet.weth, WETH_DECIMALS) : undefined}
-          onMax={() => wallet && d.onWeth(formatUnits(wallet.weth, WETH_DECIMALS))}
+          token={market.symbol}
+          dot="bg-asset"
+          value={d.base}
+          onChange={d.onBase}
+          disabled={!d.sides.base}
+          note={d.sides.base ? undefined : "Not needed for this range"}
+          balance={wallet ? token(wallet.base, market.baseDecimals) : undefined}
+          onMax={() => wallet && d.onBase(formatUnits(wallet.base, market.baseDecimals))}
         />
         <AmountField
           label="You add"
@@ -158,12 +160,12 @@ export function DepositPanel({ pool, stats, draft: d }: { pool: PoolState; stats
       </div>
 
       <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-raised">
-        <i className="block bg-weth transition-[width] duration-250" style={{ width: `${wethShare}%` }} />
+        <i className="block bg-asset transition-[width] duration-250" style={{ width: `${baseShare}%` }} />
         <i className="block flex-1 bg-usdc" />
       </div>
       <div className="mt-1 flex justify-between font-mono text-xs text-muted">
-        <span>{Math.round(wethShare)}% tWETH</span>
-        <span>{100 - Math.round(wethShare)}% tUSDC</span>
+        <span>{Math.round(baseShare)}% {market.symbol}</span>
+        <span>{100 - Math.round(baseShare)}% tUSDC</span>
       </div>
 
       <div className="mt-3 rounded-lg bg-raised px-3 py-0.5">

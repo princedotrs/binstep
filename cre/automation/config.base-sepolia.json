@@ -3,13 +3,53 @@
   "chainSelectorName": "ethereum-testnet-sepolia-base-1",
   "managerAddress": "0xF5853e9da895496Da25975C94f02F0DfcBe18aeC",
   "automationAddress": "0x7963d38592C079d5917433e84a57a4fF4f91AAE6",
-  "priceApiUrl": "https://api.coinbase.com/v2/prices/ETH-USD/spot",
+  "registryAddress": "0xFD7401Fd8090c97450FD903dB66fEf2C333B7256",
+  "markets": [
+    {
+      "poolId": "0x10eb07d0624a270049642011a2c2270299829c0808d9444b07cf44ccac7d7831",
+      "baseIsToken0": true,
+      "baseDecimals": 18,
+      "priceApiUrl": "https://api.coinbase.com/v2/prices/ETH-USD/spot"
+    },
+    {
+      "poolId": "0xb1e75b3e36be12f58e1c67974e0be28867f49416bd4de1682a4ceca095129ab4",
+      "baseIsToken0": false,
+      "baseDecimals": 8
+    },
+    {
+      "poolId": "0x5574e89a779be01ab3fee2bd3ebba9d02869faba97da87f2ddf588c6f23488f0",
+      "baseIsToken0": true,
+      "baseDecimals": 8
+    },
+    {
+      "poolId": "0x38096ffbf420c626a53b55f01d3ec8f7edc4525d9ef92c95e8aa4a21e06db7b2",
+      "baseIsToken0": true,
+      "baseDecimals": 18
+    },
+    {
+      "poolId": "0x0c5d89f8c2c410a9726eb2386cbbb1aa08c1f6aa2da4b7a5af59551a3c8c08ea",
+      "baseIsToken0": true,
+      "baseDecimals": 18
+    },
+    {
+      "poolId": "0x43bf974862d6691170871eaca4c953db9277c6ec37d628b27130461314bd03c7",
+      "baseIsToken0": true,
+      "baseDecimals": 18
+    },
+    {
+      "poolId": "0x488222765fd9075f8645af77ecf7f8a8a4ecbc2eadbf1701a831d820d1ecc852",
+      "baseIsToken0": true,
+      "baseDecimals": 18
+    },
+    {
+      "poolId": "0xa04de21656b83f16bdbb5bc968c59f1e58ae454bfbcf4b95e6d3049c82c073a7",
+      "baseIsToken0": true,
+      "baseDecimals": 18
+    }
+  ],
   "firstPositionId": 1,
-  "pageSize": 50,
+  "pageSize": 25,
   "gasLimit": "9500000",
-  "wethIsToken0": true,
-  "token0Decimals": 18,
-  "token1Decimals": 6,
   "maxPriceDeviationBps": 300,
   "minCompoundUsd": 1,
   "minDistanceBins": 2,

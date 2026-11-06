@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MAX_BINS } from "@/lib/addresses";
+import type { Pair } from "@/lib/math";
 import { edgeUsd, offsetOfUsd, type Range } from "@/lib/range";
 import { REACH } from "./RangeChart";
 
@@ -53,9 +54,9 @@ function PriceBox(props: {
   );
 }
 
-export function ManualRange(p: { activeBin: number; flip: boolean; range: Range; onRange: (range: Range) => void }) {
+export function ManualRange(p: { activeBin: number; pair: Pair; range: Range; onRange: (range: Range) => void }) {
   const { lo, hi } = p.range;
-  const usdAt = (offset: number) => edgeUsd(p.activeBin, offset, p.flip);
+  const usdAt = (offset: number) => edgeUsd(p.activeBin, offset, p.pair);
   const now = usdAt(0);
   const n = hi - lo + 1;
   const setLow = (offset: number) => p.onRange({ lo: clamp(offset, Math.max(-REACH, hi - MAX_BINS + 1), hi), hi });
@@ -64,8 +65,8 @@ export function ManualRange(p: { activeBin: number; flip: boolean; range: Range;
   return (
     <div>
       <div className="grid gap-2.5 sm:grid-cols-2">
-        <PriceBox label="Min price" value={usdAt(lo)} now={now} onStep={(d) => setLow(lo + d)} onCommit={(usd) => setLow(offsetOfUsd(usd, p.activeBin, p.flip))} />
-        <PriceBox label="Max price" value={usdAt(hi + 1)} now={now} onStep={(d) => setHigh(hi + d)} onCommit={(usd) => setHigh(offsetOfUsd(usd, p.activeBin, p.flip) - 1)} />
+        <PriceBox label="Min price" value={usdAt(lo)} now={now} onStep={(d) => setLow(lo + d)} onCommit={(usd) => setLow(offsetOfUsd(usd, p.activeBin, p.pair))} />
+        <PriceBox label="Max price" value={usdAt(hi + 1)} now={now} onStep={(d) => setHigh(hi + d)} onCommit={(usd) => setHigh(offsetOfUsd(usd, p.activeBin, p.pair) - 1)} />
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         {PRESETS.map(({ label, bins }) => {
