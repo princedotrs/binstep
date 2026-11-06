@@ -24,7 +24,8 @@ contract DeployLocal is Script {
     using PoolIdLibrary for PoolKey;
 
     int24 constant SPACING = 10;
-    int24 constant MAX_TICK_DEVIATION = 200;
+    int24 constant MAX_TICK_DRIFT = 50;
+    uint32 constant MIN_REBALANCE_INTERVAL = 60;
     uint64 constant MAX_REPORT_AGE = 3600;
     uint160 constant SQRT_PRICE_1_1 = 79228162514264337593543950336;
 
@@ -39,9 +40,8 @@ contract DeployLocal is Script {
 
         PoolManager poolManager = new PoolManager(deployer);
         PoolSwapTest swapRouter = new PoolSwapTest(poolManager);
-        BinStepManager manager = new BinStepManager(poolManager, deployer);
-        BinStepAutomation automation =
-            new BinStepAutomation(manager, deployer, deployer, MAX_TICK_DEVIATION, MAX_REPORT_AGE);
+        BinStepManager manager = new BinStepManager(poolManager, deployer, MAX_TICK_DRIFT, MIN_REBALANCE_INTERVAL);
+        BinStepAutomation automation = new BinStepAutomation(manager, deployer, deployer, MAX_REPORT_AGE);
 
         uint160 flags = Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
             | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG;
@@ -71,6 +71,10 @@ contract DeployLocal is Script {
         uint256 spot = manager.mint(_mintParams(key, -8, 16, Strategy.Spot));
         uint256 curve = manager.mint(_mintParams(key, -8, 16, Strategy.Curve));
         uint256 bidAsk = manager.mint(_mintParams(key, -8, 16, Strategy.BidAsk));
+
+        // Depth outside the test positions, so swaps can move the price past them.
+        manager.mint(_mintParams(key, -32, 32, Strategy.Spot));
+        manager.mint(_mintParams(key, 1, 32, Strategy.Spot));
 
         vm.stopBroadcast();
 

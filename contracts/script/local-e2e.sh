@@ -27,7 +27,10 @@ swap() { # zeroForOne amount
   send "$ROUTER" 'swap((address,address,uint24,int24,address),(bool,int256,uint160),(bool,bool),bytes)' \
     "$KEYT" "($1,-$2,$limit)" "(false,false)" 0x
 }
-tick() { call "$HOOK" 'feeStates(bytes32)(int24,uint40,uint32)' "$POOL" | head -1 | awk '{print $1}'; }
+tick() { call "$HOOK" 'poolStates(bytes32)(int24,int24,int24,int24,uint40,uint32,uint32)' "$POOL" | head -1 | awk '{print $1}'; }
+stable() { call "$HOOK" 'stableTick(bytes32)(int24)' "$POOL" | awk '{print $1}'; }
+successor() { call "$MANAGER" 'successorLowerBin(uint256)(int24)' "$1" | awk '{print $1}'; }
+wait_seconds() { cast rpc --rpc-url "$RPC" evm_increaseTime "$1" >/dev/null; cast rpc --rpc-url "$RPC" evm_mine >/dev/null; }
 fee() { call "$HOOK" 'currentFee(bytes32)(uint24)' "$POOL" | awk '{print $1}'; }
 lower_bin() {
   call "$MANAGER" 'getPosition(uint256)((address,(address,address,uint24,int24,address),int24,uint8,uint8,bool,bool,uint256,uint256))' "$1" |
@@ -38,11 +41,10 @@ bin_sum() {
     python3 -c "import re,sys;s=re.sub(r'\[[0-9.e]+\]','',sys.stdin.read());print(sum(int(x) for x in re.findall(r'\d+',s)))"
 }
 report() { # actions
-  cast rpc --rpc-url "$RPC" evm_increaseTime 5 >/dev/null
-  cast rpc --rpc-url "$RPC" evm_mine >/dev/null
+  wait_seconds 5
   local now payload metadata
   now=$(cast block latest --rpc-url "$RPC" --field timestamp)
-  payload=$(cast abi-encode 'f(uint64,(uint8,uint256,int24,int24)[])' "$now" "$1")
+  payload=$(cast abi-encode 'f(uint64,(uint8,uint256)[])' "$now" "$1")
   metadata=$(cast concat-hex 0x$(printf '%064x' 1) 0x$(printf '%020x' 0) "$ME")
   cast send --json --rpc-url "$RPC" --private-key "$KEY" "$AUTOMATION" 'onReport(bytes,bytes)' "$metadata" "$payload"
 }
@@ -58,24 +60,32 @@ base=$(fee)
 [ "$base" = 500 ] && pass "pool starts at the base fee" || die "base fee was $base"
 
 for _ in 1 2 3 4 5; do swap true 200000000000000000000; swap false 200000000000000000000; done
+swap true 300000000000000000000
 [ "$(fee)" -gt "$base" ] && pass "fee rose to $(fee) after swaps" || die "fee did not rise"
+swap false 300000000000000000000
+wait_seconds 300
 
 before=$(bin_sum 1)
-receipt=$(report "[(0,1,0,$(tick))]")
+receipt=$(report "[(0,1)]")
 [ "$(count_topic "$receipt" "$EXECUTED")" = 1 ] || die "compound report did not execute"
 after=$(bin_sum 1)
 python3 -c "import sys;sys.exit(0 if $after > $before else 1)" && pass "CRE report compounded fees into liquidity" || die "liquidity did not grow"
 
-receipt=$(report "[(1,1,40,5000)]")
-[ "$(count_topic "$receipt" "$SKIPPED")" = 1 ] || die "false price was not skipped"
-[ "$(lower_bin 1)" = -8 ] && pass "report with a false price was skipped" || die "false price moved the position"
-
-swap true 1500000000000000000000
+swap true 3500000000000000000000
 now_tick=$(tick)
-new_lower=$(( now_tick / 10 - 8 ))
-receipt=$(report "[(1,1,$new_lower,$now_tick)]")
+[ "$now_tick" -lt -80 ] || die "price stayed in range at tick $now_tick"
+receipt=$(report "[(1,1)]")
+[ "$(count_topic "$receipt" "$SKIPPED")" = 1 ] || die "unstable price was not skipped"
+[ "$(lower_bin 1)" = -8 ] && pass "report during a price spike was skipped (live $now_tick, stable $(stable))" || die "spike moved the position"
+
+wait_seconds 300
+expected=$(successor 1)
+receipt=$(report "[(1,1)]")
 [ "$(count_topic "$receipt" "$EXECUTED")" = 1 ] || die "rebalance report did not execute"
-[ "$(lower_bin 1)" = "$new_lower" ] && pass "CRE report rebalanced to bin $new_lower at tick $now_tick" || die "position did not move"
+[ "$(lower_bin 1)" = "$expected" ] && pass "report rebalanced to the contract's own bin $expected at tick $now_tick" || die "position did not move"
+
+receipt=$(report "[(1,1)]")
+[ "$(count_topic "$receipt" "$SKIPPED")" = 1 ] && pass "immediate second rebalance was blocked" || die "cooldown did not hold"
 
 b0=$(call "$TOKEN0" 'balanceOf(address)(uint256)' "$ME" | awk '{print $1}')
 b1=$(call "$TOKEN1" 'balanceOf(address)(uint256)' "$ME" | awk '{print $1}')
