@@ -51,6 +51,9 @@ is not enabled. Until it is, nothing acts on positions unless this timer is runn
 ./scripts/run-automation.sh        # broadcasts every 5 minutes while this machine is on
 ```
 
+`../scripts/demo-bot.sh` also runs the workflow on this timer. Use one or the other, so two
+processes never send from the same wallet.
+
 The test pool only moves when someone swaps, so `move-price.sh` stands in for
 arbitrage. Stay within 3% of the live price, or the workflow refuses to act.
 
