@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createPublicClient, type PublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
+import { LOG_RANGE, logClient } from "./server-rpc";
 import { scanStats } from "./stats";
 import { DEFAULT_MARKET } from "./markets";
 import { readPools, readWallet } from "./read";
@@ -31,7 +32,7 @@ test("reads without a wallet", async () => {
 
 test("scans a day of swap stats", async () => {
   const start = Date.now();
-  const all = await scanStats(client);
+  const all = await scanStats(logClient, LOG_RANGE);
   const stats = all[DEFAULT_MARKET.id];
   console.log(`scanned in ${Date.now() - start}ms:`, stats);
   expect(stats.volume).toBeGreaterThanOrEqual(0);

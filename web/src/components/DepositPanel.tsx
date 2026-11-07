@@ -113,6 +113,7 @@ export function DepositPanel({ pool, stats, draft: d }: { pool: PoolState; stats
 
   const value = d.baseUsd + d.usdcUsd;
   const baseShare = value > 0 ? (d.baseUsd / value) * 100 : 50;
+  const estimated = stats && value > 0;
 
   return (
     <div>
@@ -188,21 +189,21 @@ export function DepositPanel({ pool, stats, draft: d }: { pool: PoolState; stats
       <div className="mt-2 rounded-lg bg-raised px-3 py-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-xs text-muted">Estimated APR at this price</span>
-          <b className={`font-mono text-[22px] font-semibold ${stats && d.earnings.apr > 0 ? "text-good" : "text-muted"}`}>
-            {stats ? percent(d.earnings.apr) : "–"}
+          <b className={`font-mono text-[22px] font-semibold ${estimated && d.earnings.apr > 0 ? "text-good" : "text-muted"}`}>
+            {estimated ? percent(d.earnings.apr) : "–"}
           </b>
         </div>
         <dl className="mt-1 flex justify-between gap-3 text-xs text-muted">
           <div className="flex gap-1.5">
             <dt>Fees per day</dt>
-            <dd className="font-mono text-text">{stats ? price(d.earnings.perDay) : "–"}</dd>
+            <dd className="font-mono text-text">{estimated ? price(d.earnings.perDay) : "–"}</dd>
           </div>
           <div className="flex gap-1.5">
             <dt>Capital efficiency</dt>
             <dd className="font-mono text-text">{Math.round(capitalEfficiency(d.numBins))}×</dd>
           </div>
         </dl>
-        <p className="mt-1 text-[11px] text-faint">Based on the last 24 hours of fees, which can change.</p>
+        <p className="mt-1 text-[11px] text-faint">Enter an amount to see an estimate. It uses the last 24 hours of fees, which can change.</p>
       </div>
 
       <Primary className="mt-3" disabled={!!blocker || !!busy} onClick={submit}>

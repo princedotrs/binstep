@@ -48,7 +48,7 @@ export function PositionCard({ position: p, pool, mine }: { position: Position; 
   const [low, high] = [p.lowerBin, p.lowerBin + p.numBins].map((b) => binToUsd(b, pool.market)).sort((a, b) => a - b);
   const { market } = pool;
   const canMove = !p.inRange && p.successorLowerBin !== p.lowerBin;
-  const button = "rounded-md border border-line px-3 py-1.5 text-sm hover:border-muted disabled:text-muted";
+  const button = "rounded-md border border-line px-3 py-1.5 text-sm hover:border-muted disabled:text-muted pointer-coarse:min-h-11";
 
   return (
     <Panel>

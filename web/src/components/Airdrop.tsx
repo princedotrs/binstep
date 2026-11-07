@@ -98,7 +98,7 @@ export function AirdropButton({ market }: { market: Market }) {
         {note}
       </span>
       <button
-        className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted disabled:text-muted"
+        className="rounded-lg border border-line bg-raised px-3 py-1.5 text-sm hover:border-muted disabled:text-muted pointer-coarse:min-h-11"
         disabled={busy}
         onClick={() => drop(address, "more")}
       >

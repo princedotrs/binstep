@@ -30,7 +30,7 @@ function PriceBox(props: {
     if (usd > 0) props.onCommit(usd);
     else setText(plain(props.value));
   };
-  const step = "h-7 w-7 flex-none rounded-md bg-raised text-base leading-none hover:bg-line";
+  const step = "h-7 w-7 flex-none rounded-md bg-raised text-base leading-none hover:bg-line pointer-coarse:h-10 pointer-coarse:w-10";
   return (
     <div className="rounded-lg border border-line bg-ink px-2.5 py-2 focus-within:border-accent">
       <label className="mb-1 flex justify-between text-xs text-muted">

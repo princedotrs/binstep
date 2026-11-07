@@ -13,7 +13,7 @@ import { createBlocker, parseAmount } from "@/lib/validate";
 
 /** BinStepRegistry.CREATOR_USD */
 const CREATOR_USD = 100_000;
-const FIELD = "mt-1 w-full rounded-lg border border-line bg-raised px-3 py-2 text-sm outline-none focus:border-accent";
+const FIELD = "mt-1 w-full rounded-lg border border-line bg-raised px-3 py-2 text-base outline-none focus:border-accent sm:text-sm";
 
 export function CreatePool() {
   const { address } = useAccount();

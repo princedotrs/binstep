@@ -7,9 +7,8 @@
   --color-line: #2a2e4f;
   --color-text: #f1f2fa;
   --color-muted: #9da2c2;
-  --color-faint: #666b90;
+  --color-faint: #8a8fb3;
   --color-accent: #7c6cff;
-  --color-accent2: #e45ccb;
   --color-on-accent: #0a0b18;
   --color-asset: #ff7db8;
   --color-usdc: #6e9bff;
@@ -28,13 +27,6 @@ body {
   font-family: var(--font-sans);
 }
 
-body {
-  background:
-    radial-gradient(1000px 460px at 78% -140px, color-mix(in srgb, var(--color-accent2) 15%, transparent), transparent 70%),
-    radial-gradient(900px 460px at 12% -160px, color-mix(in srgb, var(--color-accent) 20%, transparent), transparent 70%),
-    var(--color-ink);
-}
-
 button:not(:disabled),
 [role="radio"] {
   cursor: pointer;
@@ -51,19 +43,20 @@ input[inputmode="decimal"]:focus-visible {
 }
 
 .brand:not(:disabled) {
-  background: linear-gradient(100deg, var(--color-accent), var(--color-accent2));
+  background: var(--color-accent);
   color: var(--color-on-accent);
 }
 
-.brand-text {
-  background: linear-gradient(100deg, var(--color-accent), var(--color-accent2));
-  background-clip: text;
-  color: transparent;
+.market-row:hover {
+  background: var(--color-panel);
 }
 
-.market-row:hover {
-  background: var(--color-raised);
-  box-shadow: inset 2px 0 0 var(--color-accent);
+/* A row that scrolls sideways on a phone instead of wrapping. */
+.scroll-row {
+  scrollbar-width: none;
+}
+.scroll-row::-webkit-scrollbar {
+  display: none;
 }
 
 /* Range chart */
@@ -147,6 +140,31 @@ input[inputmode="decimal"]:focus-visible {
 .chart-handle:hover .chart-grip,
 .chart-handle:active .chart-grip {
   transform: scale(1.14);
+}
+
+/* Fingers need a wider target than the line they drag. */
+@media (pointer: coarse) {
+  .chart-handle {
+    width: 44px;
+    margin-left: -22px;
+  }
+  .chart-grip {
+    width: 18px;
+    height: 52px;
+  }
+}
+
+/* On a phone each price tag sits outside its handle, so the two cannot overlap. */
+.chart-tag {
+  left: var(--x);
+}
+@media (max-width: 639px) {
+  .chart-tag.low {
+    left: max(5.25rem, var(--x));
+  }
+  .chart-tag.high {
+    left: min(calc(100% - 5.25rem), var(--x));
+  }
 }
 
 .tx-notice {

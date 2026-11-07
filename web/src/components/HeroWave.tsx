@@ -18,7 +18,7 @@ export function HeroWave() {
   }, []);
 
   return (
-    <div className="relative hidden h-28 max-w-md flex-1 items-end gap-0.5 md:flex" aria-hidden>
+    <div className="relative mt-3 flex h-20 w-full flex-none items-end gap-0.5 md:mt-0 md:h-28 md:w-auto md:max-w-md md:flex-1" aria-hidden>
       {Array.from({ length: BARS }, (_, i) => {
         const height = FLOOR + shapeCurve(strategy, (i + 0.5) / BARS) * (strategy === 0 ? SPOT_HEIGHT : 100 - FLOOR);
         const side = i < BARS / 2 - 1 ? undefined : i > BARS / 2 ? "var(--color-asset)" : "var(--color-now)";

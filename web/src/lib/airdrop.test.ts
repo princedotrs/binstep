@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AIRDROP_USDC, GAS_DRIP, airdropBase, decideAirdrop } from "./airdrop";
+import { AIRDROP_USDC, GAS_DRIP, airdropBase, decideAirdrop, takeGasDrip, type GasDrips } from "./airdrop";
 
 const empty = { base: 0n, usdc: 0n, eth: 0n };
 const AIRDROP = 10n ** 19n;
@@ -48,5 +48,29 @@ describe("airdropBase", () => {
   test("uses the market's decimals", () => {
     expect(airdropBase({ airdrop: "0.33", baseDecimals: 8 })).toBe(33_000_000n);
     expect(airdropBase({ airdrop: "10", baseDecimals: 18 })).toBe(10n ** 19n);
+  });
+});
+
+describe("takeGasDrip", () => {
+  const HOUR = 60 * 60_000;
+
+  test("limits one IP to three drips an hour", () => {
+    const drips: GasDrips = new Map();
+    const taken = [0, 1, 2, 3].map((at) => takeGasDrip(drips, "1.1.1.1", at));
+    expect(taken).toEqual([true, true, true, false]);
+    expect(takeGasDrip(drips, "2.2.2.2", 4)).toBe(true);
+  });
+
+  test("allows an IP again after the hour", () => {
+    const drips: GasDrips = new Map();
+    [0, 1, 2].forEach((at) => takeGasDrip(drips, "1.1.1.1", at));
+    expect(takeGasDrip(drips, "1.1.1.1", HOUR + 3)).toBe(true);
+  });
+
+  test("limits a server to thirty drips an hour across IPs", () => {
+    const drips: GasDrips = new Map();
+    const taken = Array.from({ length: 31 }, (_, i) => takeGasDrip(drips, `10.0.0.${i}`, i));
+    expect(taken.filter(Boolean)).toHaveLength(30);
+    expect(taken[30]).toBe(false);
   });
 });

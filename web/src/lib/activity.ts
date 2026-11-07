@@ -1,6 +1,6 @@
 import { parseAbiItem, type PublicClient } from "viem";
 import { AUTOMATION_BLOCK, addresses } from "./addresses";
-import { blockChunks } from "./stats";
+import { blockChunks, forEachChunk } from "./stats";
 
 const COMPOUND = 0;
 
@@ -22,10 +22,10 @@ export function countActions(actions: { positionId: bigint; kind: number }[]) {
 export async function scanAutomation(client: PublicClient, logRange: bigint) {
   if (AUTOMATION_BLOCK === undefined) return {};
   const toBlock = await client.getBlockNumber();
-  const chunks = await Promise.all(
-    blockChunks(BigInt(AUTOMATION_BLOCK), toBlock, logRange).map(([fromBlock, to]) =>
-      client.getLogs({ address: addresses.automation, event: executedEvent, fromBlock, toBlock: to }),
-    ),
-  );
-  return countActions(chunks.flat().map(({ args }) => ({ positionId: args.positionId ?? 0n, kind: args.kind ?? 0 })));
+  const actions: { positionId: bigint; kind: number }[] = [];
+  await forEachChunk(blockChunks(BigInt(AUTOMATION_BLOCK), toBlock, logRange), async (fromBlock, to) => {
+    const logs = await client.getLogs({ address: addresses.automation, event: executedEvent, fromBlock, toBlock: to });
+    actions.push(...logs.map(({ args }) => ({ positionId: args.positionId ?? 0n, kind: args.kind ?? 0 })));
+  });
+  return countActions(actions);
 }
