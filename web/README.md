@@ -20,9 +20,9 @@ contracts' stable price check and cooldown, which apply to every action.
 The contracts accept reports only through their forwarder, so the keeper sends each one there. The
 forwarder on Base Sepolia is a mock that checks no signatures, so anyone can send a report. That is
 only safe here because a report just names positions that opted in. Replace it before using real funds.
-Volume, fees and APR come from the last 43,200 blocks of swap logs. `/api/stats` scans
-them on the server and caches the totals, because the public RPC only serves 200 blocks
-of logs per request. No wallet address is involved.
+Volume, fees and APR come from the last 24 hours of swap logs, which is 432,000 blocks at
+Base Sepolia's 0.2 second block time. `/api/stats` scans them on the server and caches the totals.
+No wallet address is involved.
 
 The chart's bars use the contract's real strategy weights. The parabola behind them,
 the strategy icons and the homepage animation are decoration only.

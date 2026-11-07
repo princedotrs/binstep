@@ -96,5 +96,4 @@ See [`web/README.md`](web/README.md) for more on the app.
 
 - Not audited, and for test tokens only.
 - Liquidity placed just before a large swap (JIT) is not blocked.
-- The stats shown as 24h currently cover about 2.4 hours of swaps.
 - On a phone, a wallet connects only from inside a wallet app's browser.

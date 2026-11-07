@@ -2,8 +2,8 @@ import { parseAbiItem, type PublicClient } from "viem";
 import { FIRST_BLOCK, POOL_MANAGER } from "./addresses";
 import { readMarkets } from "./read";
 
-/** Base Sepolia makes a block every 2 seconds. */
-const BLOCKS_PER_DAY = 43_200n;
+/** Base Sepolia makes a block every 0.2 seconds. */
+const BLOCKS_PER_DAY = 432_000n;
 /** The default public RPC refuses eth_getLogs over wider ranges. */
 const DEFAULT_LOG_RANGE = 200n;
 const CONCURRENT_READS = 6;
